@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: permissionizer-server
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+  mvc:
+    problemdetails:
+      enabled: true
+  threads:
+    virtual:
+      enabled: true
+
+permissionizer:
+  github-url: https://api.github.com
+  expected-audience: permissionizer-server (https://permissionizer.app)
+  private-key-fail-on-invalid: true

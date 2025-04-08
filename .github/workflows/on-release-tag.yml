@@ -1,0 +1,18 @@
+
+name: Tag & Release Workflow
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  docker:
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    uses: ./.github/workflows/reusable-docker-build.yaml
+    with:
+      push: true
+

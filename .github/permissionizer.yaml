@@ -1,0 +1,6 @@
+self: permissionizer/server
+allow:
+  - repository: permissionizer/request-token
+    permissions:
+      contents: read
+      issues: write

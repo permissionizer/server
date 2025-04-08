@@ -1,0 +1,55 @@
+name: Build
+on:
+  push:
+    branches:
+      - main
+    tags-ignore:
+      - '*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  # On main, we don't want any jobs cancelled so the sha is used to name the group
+  # On PR branches, we cancel the job if new commits are pushed
+  # More info: https://stackoverflow.com/a/68422069/253468
+  group: ${{ (github.ref == 'refs/heads/main') && format('{0}-{1}', github.workflow_ref, github.sha) || format('{0}-{1}', github.workflow_ref, github.head_ref) }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    permissions:
+      contents: read
+      checks: write # for publishing test results and annotations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Build
+        run: ./gradlew build
+
+      - name: Publish Test Report
+        uses: mikepenz/action-junit-report@v5
+        if: ${{ !cancelled() }} # always run even if the previous step fails
+        with:
+          report_paths: '**/build/test-results/test/TEST-*.xml'
+
+  docker:
+    needs: build
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    uses: ./.github/workflows/reusable-docker-build.yaml
+    with:
+      push: ${{ github.event_name != 'pull_request' }}

@@ -1,0 +1,10 @@
+# This is a sample configuration file for the permissionizer-server using Spring Boot application properties.
+
+# permissionizer:
+#   expected-audience: permissionizer-server (https://permissionizer.app)
+#   client-id: github-app-client-id
+#   private-key: |
+#     -----BEGIN RSA PRIVATE KEY-----
+#     ENTER YOUR GITHUB PRIVATE KEY HERE
+#     -----END RSA PRIVATE KEY-----
+#   webhook-secret: github-webhook-secret
