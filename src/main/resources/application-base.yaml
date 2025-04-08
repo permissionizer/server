@@ -9,6 +9,9 @@ spring:
   threads:
     virtual:
       enabled: true
+server:
+  http2:
+    enabled: true
 
 permissionizer:
   github-url: https://api.github.com
