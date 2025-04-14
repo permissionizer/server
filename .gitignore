@@ -40,3 +40,4 @@ out/
 
 config/application.dev.yaml
 config/private-key.dev.pem
+config/dev/**

@@ -1,6 +1,7 @@
 # This is a sample configuration file for the permissionizer-server using Spring Boot application properties.
 
 # permissionizer:
+#   unsecure-skip-token-validation: false
 #   expected-audience: permissionizer-server (https://permissionizer.app)
 #   client-id: github-app-client-id
 #   private-key: |
