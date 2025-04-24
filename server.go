@@ -6,7 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"server/api"
+	"server/permissionizer"
 	"server/util"
 	"strings"
 	"time"
@@ -29,7 +29,7 @@ type config struct {
 }
 
 var (
-	fakeToken    = flag.Bool("fake-token", false, "[Testing only] Generate token for testing purposes")
+	fakeToken        = flag.Bool("fake-token", false, "[Testing only] Generate token for testing purposes")
 	tokenRepository  = flag.String("repository", "", "[Testing only] Issuing repository of the generated token")
 	tokenRef         = flag.String("ref", "refs/head/main", "[Testing only] Ref of the generated token")
 	tokenWorkflowRef = flag.String("workflow-ref", "", "[Testing only] Workflow ref of the generated token")
@@ -52,7 +52,7 @@ func main() {
 	githubClient := github.NewClient(authenticatedClient)
 
 	// Create API instance with the client
-	permissionizerApi := api.NewApi(githubClient, config.expectedAudience, config.webhookSecret, config.skipTokenValidation)
+	permissionizerApi := permissionizer.NewApi(githubClient, config.expectedAudience, config.webhookSecret, config.skipTokenValidation)
 
 	gin.SetMode("release")
 	router := gin.New()
