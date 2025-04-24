@@ -26,6 +26,54 @@ type TokenRequestor struct {
 	RunId       string `json:"run_id"`
 }
 
+type PolicyError struct {
+	TargetRepository string            `json:"target_repository"`
+	PolicyIndex      int               `json:"policy_index"`
+	Type             ErrorType         `json:"type"`
+	Errors           map[string]string `json:"errors,omitempty"`
+}
+
+type PolicyDecision struct {
+	Allow  bool          `json:"allow"`
+	Errors []PolicyError `json:"errors"`
+}
+
+type RepositoryPolicy struct {
+	Self  string        `json:"self"`
+	Allow []AllowPolicy `json:"allow"`
+}
+
+type AllowPolicy struct {
+	Repository  string                          `json:"repository"`
+	Ref         *string                         `json:"ref,omitempty"`
+	WorkflowRef *string                         `json:"workflow_ref,omitempty"`
+	Permissions *github.InstallationPermissions `json:"permissions"`
+}
+
+type ErrorType string
+
+const (
+	PermissionizerNotInstalled                   ErrorType = "permissionizer_not_installed"
+	PermissionizerNoSufficientPermissions        ErrorType = "permissionizer_no_sufficient_permissions"
+	TargetRepositoryMisconfiguredSelfClause      ErrorType = "target_repository_misconfigured_self_clause"
+	TargetRepositoryDoesNotAllowAccess           ErrorType = "target_repository_does_not_allow_access"
+	TargetRepositoryDoesNotAllowFromRef          ErrorType = "target_repository_does_not_allow_access_from_ref"
+	TargetRepositoryDoesNotAllowFromWorkflowRef  ErrorType = "target_repository_does_not_allow_access_from_workflow_ref"
+	TargetRepositoryDoesNotAllowPermissionAccess ErrorType = "target_repository_does_not_allow_requested_permission_access"
+)
+
+type PermissionsDecision struct {
+	Allow               bool
+	PermissionDecisions []PermissionDecision
+}
+
+type PermissionDecision struct {
+	Allow           bool
+	Permission      string
+	RequestedAccess string
+	AllowedAccess   string
+}
+
 type ProblemDetail struct {
 
 	// Type is a URI reference [RFC3986] that identifies the problem type.

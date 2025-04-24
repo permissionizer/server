@@ -1,4 +1,4 @@
-package api
+package permissionizer
 
 import (
 	"context"
@@ -164,7 +164,7 @@ func (a *PermissionizerApi) validateIDToken(ctx context.Context, IDToken string)
 		return nil, fmt.Errorf("failed to verify ID token: %w", err)
 	}
 
-	// Optionally decode claims
+	// Decode claims
 	var claims map[string]interface{}
 	if err := idToken.Claims(&claims); err != nil {
 		return nil, fmt.Errorf("failed to decode ID token claims: %w", err)
