@@ -1,5 +1,9 @@
+.idea
 .github
+bin
 config
 README.md
 .gitignore
 Dockerfile
+cover.out
+*.iml

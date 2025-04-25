@@ -9,13 +9,14 @@ This is a server for [Permissionizer App](TODO), a GitHub OIDC provider that iss
 3. Use docker image `ghcr.io/permissionizer/server:latest` to run the server with mounting the configuration or using environment variables.
 4. When using `permissionizer/request-token` action, specify the `permissionizer-server` URL:
    ```yaml
-   - name: Request permissionizer token
-     id: permissionizer
+   - id: request-token
      uses: permissionizer/request-token@v1
      with:
        permissionizer-server: https://permissionizer.mycompany.com
-       target-repositories: permissionizer/server
-       permissions: contents:read
+       target-repository: permissionizer/server
+       permissions: |
+        contents: read
+        issues: write
    ```
   
 ## Local development
@@ -26,7 +27,7 @@ This is a server for [Permissionizer App](TODO), a GitHub OIDC provider that iss
    ```bash
    go run .
    ```
-4. Issue a permissionizer token with (fake) GitHub OIDC token
+4. Issue a permissionizer token with a (fake) GitHub OIDC token
    ```bash
    curl -d '
      {
