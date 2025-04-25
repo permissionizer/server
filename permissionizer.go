@@ -107,8 +107,8 @@ func initConfig(sugar *zap.SugaredLogger) *config {
 	viper.AddConfigPath("config/dev")
 	viper.AddConfigPath("config")
 
-	viper.SetDefault("expected-audience", "permissionizer-server (https://permissionizer.app)")
-	viper.SetDefault("unsecure-skip-token-checks", false)
+	viper.SetDefault("permissionizer.expected-audience", "permissionizer-server (https://permissionizer.app)")
+	viper.SetDefault("permissionizer.unsecure-skip-token-checks", false)
 	err := viper.ReadInConfig()
 	if err != nil {
 		sugar.Infow("Not found config in default location", "path", "config/permissionizer-server.yaml")
