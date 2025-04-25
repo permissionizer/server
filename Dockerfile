@@ -10,8 +10,9 @@ ADD . /workspace
 ARG TARGETOS
 ARG TARGETARCH
 ARG VERSION
+ARG REVISION
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-  go build -ldflags "-s -w -X main.version=${VERSION}" -trimpath -buildvcs=false -o bin/permissionizer .
+  go build -ldflags "-s -w -X main.version='${VERSION}' -X main.revision='${REVISION}'" -trimpath -buildvcs=false -o bin/permissionizer .
 
 FROM alpine:3.21.3
 WORKDIR /app

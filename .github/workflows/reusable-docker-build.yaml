@@ -41,7 +41,8 @@ jobs:
           context: .
           file: Dockerfile
           build-args: |
-            VERSION="${{ steps.meta.outputs.version }} (${{ github.sha }})"
+            VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+            REVISION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.revision'] }}
           push: ${{ inputs.push }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

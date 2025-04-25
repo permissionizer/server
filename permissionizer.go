@@ -21,6 +21,7 @@ import (
 
 var (
 	version          = "dev"
+	revision         = ""
 	production       = flag.Bool("production", false, "Enable production mode")
 	fakeToken        = flag.Bool("fake-token", false, "[Testing only] Generate token for testing purposes")
 	tokenRepository  = flag.String("repository", "", "[Testing only] Issuing repository of the generated token")
@@ -82,7 +83,7 @@ func main() {
 			logger.Fatal(err)
 		}
 	}()
-	logger.Infow("Server started", "port", 8080, "version", version)
+	logger.Infow("Server started", "port", 8080, "version", fmt.Sprintf("%s (%s)", version, revision))
 	quit := make(chan os.Signal)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
