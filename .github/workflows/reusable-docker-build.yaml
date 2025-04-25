@@ -7,10 +7,6 @@ on:
         required: true
         type: boolean
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: permissionizer/server
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -47,7 +43,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

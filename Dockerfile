@@ -13,7 +13,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
   go build -ldflags "-s -w" -trimpath -buildvcs=false -o bin/permissionizer .
 
 FROM alpine:3.21.3
-WORKDIR app
+WORKDIR /app
 
 COPY --from=builder /workspace/bin/permissionizer ./permissionizer
 
