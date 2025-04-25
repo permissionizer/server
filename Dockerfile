@@ -1,15 +1,21 @@
-FROM container-registry.oracle.com/graalvm/native-image:24 AS builder
+FROM --platform=${BUILDPLATFORM} golang:1.24-alpine AS builder
 
-RUN microdnf install findutils
+WORKDIR /workspace
 
-WORKDIR /server
-COPY . /server
-RUN ./gradlew nativeCompile
+COPY go.mod go.sum /workspace/
+RUN go mod download
 
-FROM oraclelinux:9-slim
+ADD . /workspace
 
-EXPOSE 8080
+ARG TARGETOS
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+  go build -ldflags "-s -w" -trimpath -buildvcs=false -o bin/permissionizer .
 
-COPY --from=builder /server/build/native/nativeCompile/permissionizer-server permissionizer-server
+FROM alpine:3.21.3
+WORKDIR app
 
-ENTRYPOINT ["/permissionizer-server"]
+COPY --from=builder /workspace/bin/permissionizer ./permissionizer
+
+ENTRYPOINT ["/app/permissionizer"]
+CMD ["--production"]

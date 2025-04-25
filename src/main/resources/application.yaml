@@ -1,3 +1,0 @@
-spring:
-  config:
-    import: 'optional:file:config/application.dev.yaml,optional:file:config/application.yaml,classpath:application-base.yaml'

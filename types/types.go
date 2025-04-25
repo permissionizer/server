@@ -7,8 +7,8 @@ import (
 )
 
 type IssueTokenRequest struct {
-	TargetRepositories []string                        `json:"target_repositories"`
-	Permissions        *github.InstallationPermissions `json:"permissions"`
+	TargetRepositories []string          `json:"target_repositories"`
+	Permissions        map[string]string `json:"permissions"`
 }
 
 type IssueTokenResponse struct {
@@ -27,15 +27,8 @@ type TokenRequestor struct {
 }
 
 type PolicyError struct {
-	TargetRepository string            `json:"target_repository"`
-	PolicyIndex      int               `json:"policy_index"`
-	Type             ErrorType         `json:"type"`
-	Errors           map[string]string `json:"errors,omitempty"`
-}
-
-type PolicyDecision struct {
-	Allow  bool          `json:"allow"`
-	Errors []PolicyError `json:"errors"`
+	Type  ErrorType `json:"type"`
+	Error string    `json:"error,omitempty"`
 }
 
 type RepositoryPolicy struct {
@@ -44,22 +37,25 @@ type RepositoryPolicy struct {
 }
 
 type AllowPolicy struct {
-	Repository  string                          `json:"repository"`
-	Ref         *string                         `json:"ref,omitempty"`
-	WorkflowRef *string                         `json:"workflow_ref,omitempty"`
-	Permissions *github.InstallationPermissions `json:"permissions"`
+	Repository  string            `json:"repository"`
+	Ref         *string           `json:"ref,omitempty"`
+	WorkflowRef *string           `json:"workflow_ref,omitempty"`
+	Permissions map[string]string `json:"permissions"`
 }
 
 type ErrorType string
 
 const (
-	PermissionizerNotInstalled                   ErrorType = "permissionizer_not_installed"
-	PermissionizerNoSufficientPermissions        ErrorType = "permissionizer_no_sufficient_permissions"
-	TargetRepositoryMisconfiguredSelfClause      ErrorType = "target_repository_misconfigured_self_clause"
-	TargetRepositoryDoesNotAllowAccess           ErrorType = "target_repository_does_not_allow_access"
-	TargetRepositoryDoesNotAllowFromRef          ErrorType = "target_repository_does_not_allow_access_from_ref"
-	TargetRepositoryDoesNotAllowFromWorkflowRef  ErrorType = "target_repository_does_not_allow_access_from_workflow_ref"
-	TargetRepositoryDoesNotAllowPermissionAccess ErrorType = "target_repository_does_not_allow_requested_permission_access"
+	InternalError                           ErrorType = "internal_error"
+	InvalidIDToken                          ErrorType = "invalid_id_token"
+	InvalidRequest                          ErrorType = "invalid_request"
+	PermissionizerNotInstalled              ErrorType = "permissionizer_not_installed"
+	PermissionizerNoSufficientPermissions   ErrorType = "permissionizer_no_sufficient_permissions"
+	TargetRepositoryMisconfigured           ErrorType = "target_repository_misconfigured"
+	TargetRepositoryDoesNotAllowAccess      ErrorType = "target_repository_does_not_allow_access"
+	TargetRepositoryDoesNotAllowRef         ErrorType = "target_repository_does_not_allow_access_from_ref"
+	TargetRepositoryDoesNotAllowWorkflowRef ErrorType = "target_repository_does_not_allow_access_from_workflow_ref"
+	TargetRepositoryDoesNotAllowPermission  ErrorType = "target_repository_does_not_allow_requested_permission_access"
 )
 
 type PermissionsDecision struct {
@@ -70,8 +66,8 @@ type PermissionsDecision struct {
 type PermissionDecision struct {
 	Allow           bool
 	Permission      string
-	RequestedAccess string
 	AllowedAccess   string
+	RequestedAccess string
 }
 
 type ProblemDetail struct {

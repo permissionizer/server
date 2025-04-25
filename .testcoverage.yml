@@ -1,0 +1,7 @@
+# https://github.com/marketplace/actions/go-test-coverage
+profile: cover.out
+
+threshold:
+  file: 0
+  package: 0
+  total: 0

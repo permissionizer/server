@@ -1,8 +1,6 @@
 .github
-.gradle
-build
 config
-src/test
 README.md
 .gitignore
 .gitattributes
+Dockerfile

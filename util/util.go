@@ -1,7 +1,11 @@
 package util
 
 import (
+	"fmt"
+	"github.com/google/go-github/v71/github"
+	"reflect"
 	"server/types"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -37,6 +41,42 @@ func GenerateUnsignedIDToken(audience string, repository string, ref string, wor
 		panic(err)
 	}
 	return tokenString
+}
+
+func MapToInstallationPermissions(permissions map[string]string) (*github.InstallationPermissions, error) {
+	installationPermissions := &github.InstallationPermissions{}
+	permissionsReflectElem := reflect.ValueOf(installationPermissions).Elem()
+	invalidPermissions := []string{}
+
+	for permission, access := range permissions {
+		setter := findPermission(permissionsReflectElem, permission)
+		if setter != nil {
+			setter.Set(reflect.ValueOf(&access))
+		} else {
+			invalidPermissions = append(invalidPermissions, permission)
+		}
+	}
+	if len(invalidPermissions) > 0 {
+		return nil, fmt.Errorf("invalid permissions: %v", invalidPermissions)
+	}
+
+	return installationPermissions, nil
+}
+
+func findPermission(permissionsValue reflect.Value, permission string) *reflect.Value {
+	normalizedKey := strings.ReplaceAll(strings.ToLower(permission), "-", "_")
+	for i := 0; i < permissionsValue.NumField(); i++ {
+		field := permissionsValue.Type().Field(i)
+		jsonTag := field.Tag.Get("json")
+		githubPermission := strings.SplitN(jsonTag, ",", 2)[0]
+		if githubPermission == normalizedKey {
+			fieldValue := permissionsValue.Field(i)
+			if fieldValue.CanSet() {
+				return &fieldValue
+			}
+		}
+	}
+	return nil
 }
 
 func Ptr[T any](v T) *T {

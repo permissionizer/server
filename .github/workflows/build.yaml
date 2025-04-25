@@ -28,20 +28,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-go@v4
         with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: 'gradle'
+          go-version: 1.24
 
       - name: Build
-        run: ./gradlew build
+        run: go build .
 
-      - name: Publish Test Report
-        uses: mikepenz/action-junit-report@v5
-        if: ${{ !cancelled() }} # always run even if the previous step fails
+      - name: Test
+        run: go test ./... -coverprofile=./cover.out -covermode=atomic -coverpkg=./...
+
+      - name: Check Test Coverage
+        uses: vladopajic/go-test-coverage@v2
         with:
-          report_paths: '**/build/test-results/test/TEST-*.xml'
+          config: ./.testcoverage.yml
 
   docker:
     needs: build

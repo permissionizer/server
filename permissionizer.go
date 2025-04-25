@@ -6,7 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"server/permissionizer"
+	"server/api"
 	"server/util"
 	"strings"
 	"time"
@@ -29,6 +29,7 @@ type config struct {
 }
 
 var (
+	production       = flag.Bool("production", false, "Enable production mode")
 	fakeToken        = flag.Bool("fake-token", false, "[Testing only] Generate token for testing purposes")
 	tokenRepository  = flag.String("repository", "", "[Testing only] Issuing repository of the generated token")
 	tokenRef         = flag.String("ref", "refs/head/main", "[Testing only] Ref of the generated token")
@@ -36,10 +37,27 @@ var (
 )
 
 func main() {
+	flag.Parse()
 	exitIfCmd()
 
-	logger, _ := zap.NewProduction()
-	defer logger.Sync()
+	var logger *zap.Logger
+	var err error
+	if production != nil && *production {
+		logger, err = zap.NewProduction()
+		gin.SetMode("release")
+	} else {
+		logger, err = zap.NewDevelopment()
+		gin.SetMode("debug")
+	}
+	if err != nil {
+		panic(err)
+	}
+	defer func(logger *zap.Logger) {
+		err := logger.Sync()
+		if err != nil {
+			panic(err)
+		}
+	}(logger)
 	sugar := logger.Sugar()
 
 	config := initConfig(sugar)
@@ -52,20 +70,21 @@ func main() {
 	githubClient := github.NewClient(authenticatedClient)
 
 	// Create API instance with the client
-	permissionizerApi := permissionizer.NewApi(githubClient, config.expectedAudience, config.webhookSecret, config.skipTokenValidation)
+	permissionizerApi := api.NewApi(githubClient, config.expectedAudience, config.webhookSecret, config.skipTokenValidation)
 
-	gin.SetMode("release")
 	router := gin.New()
 	router.Use(ginzap.Ginzap(logger, time.RFC3339, true))
 
 	router.POST("/v1/token", permissionizerApi.IssueToken)
 	router.POST("/v1/webhook", permissionizerApi.HandleWebhook)
 
-	router.Run("localhost:8080")
+	err = router.Run("localhost:8080")
+	if err != nil {
+		sugar.Fatal(err)
+	}
 }
 
 func exitIfCmd() {
-	flag.Parse()
 	if fakeToken != nil && *fakeToken {
 		if *tokenRepository == "" {
 			println("'--repository' must be set")

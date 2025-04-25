@@ -1,4 +1,5 @@
-# This is a sample configuration file for the permissionizer-server using Spring Boot application properties.
+# This is a sample configuration file for the permissionizer-server.
+# Configure the server by modifying the values below.
 
 # permissionizer:
 #   unsecure-skip-token-validation: false
