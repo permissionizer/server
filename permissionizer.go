@@ -78,7 +78,7 @@ func main() {
 	router.POST("/v1/token", permissionizerApi.IssueToken)
 	router.POST("/v1/webhook", permissionizerApi.HandleWebhook)
 
-	err = router.Run("localhost:8080")
+	err = router.Run("0.0.0.0:8080")
 	if err != nil {
 		sugar.Fatal(err)
 	}
