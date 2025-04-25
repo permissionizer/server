@@ -40,7 +40,9 @@ jobs:
         with:
           context: .
           file: Dockerfile
-          push: true
+          build-args: |
+            VERSION="${{ steps.meta.outputs.version }} (${{ github.sha }})"
+          push: ${{ inputs.push }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
@@ -51,4 +53,4 @@ jobs:
         with:
           subject-name: ghcr.io/permissionizer/server
           subject-digest: ${{ steps.push.outputs.digest }}
-          push-to-registry: true
+          push-to-registry: ${{ inputs.push }}
