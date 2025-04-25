@@ -2,5 +2,4 @@
 config
 README.md
 .gitignore
-.gitattributes
 Dockerfile

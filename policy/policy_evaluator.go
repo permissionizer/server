@@ -21,20 +21,20 @@ func MatchTargetRepositoryPolicy(requestor *types.TokenRequestor, repositoryPoli
 		policyPermissions, err := util.MapToInstallationPermissions(policy.Permissions)
 		if err != nil {
 			return &types.PolicyError{
-				Type:  types.TargetRepositoryMisconfigured,
+				Type:  types.RepositoryMisconfigured,
 				Error: err.Error(),
 			}
 		}
 		if policy.Ref != nil && *policy.Ref != requestor.Ref {
 			if mostMatchingPolicyPriority < 1 {
-				mostMatchingPolicyError = &types.PolicyError{Type: types.TargetRepositoryDoesNotAllowRef}
+				mostMatchingPolicyError = &types.PolicyError{Type: types.RepositoryDoesNotAllowAccessFromRef}
 				mostMatchingPolicyPriority = 1
 			}
 			continue
 		}
 		if policy.WorkflowRef != nil && *policy.WorkflowRef != requestor.WorkflowRef {
 			if mostMatchingPolicyPriority < 2 {
-				mostMatchingPolicyError = &types.PolicyError{Type: types.TargetRepositoryDoesNotAllowWorkflowRef}
+				mostMatchingPolicyError = &types.PolicyError{Type: types.RepositoryDoesNotAllowAccessFromWorkflowRef}
 				mostMatchingPolicyPriority = 2
 			}
 			continue
@@ -43,7 +43,7 @@ func MatchTargetRepositoryPolicy(requestor *types.TokenRequestor, repositoryPoli
 		if err != nil {
 			if mostMatchingPolicyPriority < 3 {
 				mostMatchingPolicyError = &types.PolicyError{
-					Type:  types.TargetRepositoryDoesNotAllowPermission,
+					Type:  types.RepositoryDoesNotAllowPermissions,
 					Error: err.Error(),
 				}
 				mostMatchingPolicyPriority = 3
@@ -54,7 +54,7 @@ func MatchTargetRepositoryPolicy(requestor *types.TokenRequestor, repositoryPoli
 		return nil
 	}
 	if mostMatchingPolicyError == nil {
-		mostMatchingPolicyError = &types.PolicyError{Type: types.TargetRepositoryDoesNotAllowAccess}
+		mostMatchingPolicyError = &types.PolicyError{Type: types.RepositoryDoesNotAllowAccess}
 	}
 	return mostMatchingPolicyError
 }

@@ -1,14 +1,23 @@
 package types
 
 import (
+	"crypto/rsa"
 	"time"
 
 	"github.com/google/go-github/v71/github"
 )
 
+type PermissionizerConfig struct {
+	SkipTokenValidation bool
+	ExpectedAudience    string
+	ClientId            string
+	PrivateKey          *rsa.PrivateKey
+	WebhookSecret       string
+}
+
 type IssueTokenRequest struct {
-	TargetRepositories []string          `json:"target_repositories"`
-	Permissions        map[string]string `json:"permissions"`
+	TargetRepositories []string          `json:"target_repositories" binding:"required,gte=1"`
+	Permissions        map[string]string `json:"permissions" binding:"required,gte=1"`
 }
 
 type IssueTokenResponse struct {
@@ -46,16 +55,16 @@ type AllowPolicy struct {
 type ErrorType string
 
 const (
-	InternalError                           ErrorType = "internal_error"
-	InvalidIDToken                          ErrorType = "invalid_id_token"
-	InvalidRequest                          ErrorType = "invalid_request"
-	PermissionizerNotInstalled              ErrorType = "permissionizer_not_installed"
-	PermissionizerNoSufficientPermissions   ErrorType = "permissionizer_no_sufficient_permissions"
-	TargetRepositoryMisconfigured           ErrorType = "target_repository_misconfigured"
-	TargetRepositoryDoesNotAllowAccess      ErrorType = "target_repository_does_not_allow_access"
-	TargetRepositoryDoesNotAllowRef         ErrorType = "target_repository_does_not_allow_access_from_ref"
-	TargetRepositoryDoesNotAllowWorkflowRef ErrorType = "target_repository_does_not_allow_access_from_workflow_ref"
-	TargetRepositoryDoesNotAllowPermission  ErrorType = "target_repository_does_not_allow_requested_permission_access"
+	InternalError                               ErrorType = "internal_error"
+	InvalidIDToken                              ErrorType = "invalid_id_token"
+	InvalidRequest                              ErrorType = "invalid_request"
+	PermissionizerNotInstalled                  ErrorType = "permissionizer_not_installed"
+	PermissionizerNotSufficientPermissions      ErrorType = "permissionizer_not_sufficient_permissions"
+	RepositoryMisconfigured                     ErrorType = "repository_misconfigured"
+	RepositoryDoesNotAllowAccess                ErrorType = "repository_does_not_allow_access"
+	RepositoryDoesNotAllowAccessFromRef         ErrorType = "repository_does_not_allow_access_from_ref"
+	RepositoryDoesNotAllowAccessFromWorkflowRef ErrorType = "repository_does_not_allow_access_from_workflow_ref"
+	RepositoryDoesNotAllowPermissions           ErrorType = "repository_does_not_allow_requested_permissions"
 )
 
 type PermissionsDecision struct {
