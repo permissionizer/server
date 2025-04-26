@@ -41,15 +41,15 @@ type PolicyError struct {
 }
 
 type RepositoryPolicy struct {
-	Self  string        `json:"self"`
-	Allow []AllowPolicy `json:"allow"`
+	Self  string        `yaml:"self"`
+	Allow []AllowPolicy `yaml:"allow"`
 }
 
 type AllowPolicy struct {
-	Repository  string            `json:"repository"`
-	Ref         *string           `json:"ref,omitempty"`
-	WorkflowRef *string           `json:"workflow_ref,omitempty"`
-	Permissions map[string]string `json:"permissions"`
+	Repository  string            `yaml:"repository"`
+	Ref         *string           `yaml:"ref,omitempty"`
+	WorkflowRef *string           `yaml:"workflow_ref,omitempty"`
+	Permissions map[string]string `yaml:"permissions"`
 }
 
 type ErrorType string

@@ -216,8 +216,12 @@ func (a *PermissionizerApi) fetchRepositoryPolicy(c *gin.Context, permissionizer
 		return nil, err
 	}
 
+	return ParsePolicy(permissionizerAccessFile, org, repository)
+}
+
+func ParsePolicy(content string, org string, repository string) (*types.RepositoryPolicy, error) {
 	var repositoryPolicy types.RepositoryPolicy
-	err = yaml.Unmarshal([]byte(permissionizerAccessFile), &repositoryPolicy)
+	err := yaml.Unmarshal([]byte(content), &repositoryPolicy)
 	if err != nil {
 		return nil, err
 	}
