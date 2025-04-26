@@ -1,13 +1,44 @@
 # Permissionizer / Server
 
-This is a server for [Permissionizer App](TODO), a GitHub OIDC provider that issues tokens for requesting GitHub repositories if allowed by the target repository.
+This is a server for [Permissionizer](https://github.com/marketplace/actions/permissionizer-request-token), a GitHub OIDC provider that issues tokens for requesting GitHub repositories if allowed by the target repository.
 
-## Custom Deployment
+For detailed guidance on how to use the Permissionizer App, please refer to the [permissionizer/request-token](https://github.com/marketplace/actions/permissionizer-request-token) action documentation.
 
-1. Create a GitHub App with required permissions and install it into the repository / org
-2. Add app details into `config/permissionizer-server.yaml` or use Environment variables (see `config/.env`).
-3. Use docker image `ghcr.io/permissionizer/server:latest` to run the server with mounting the configuration or using environment variables.
-4. When using `permissionizer/request-token` action, specify the `permissionizer-server` URL:
+### Custom Deployment
+
+While the process of issuing tokens is secure and requires explicit policies for
+the token exchange, to maintain full control over token exchange and deployment,
+organizations can create a custom Permissionizer App (public or internal) and
+deploy an instance of the Permissionizer Server. This ensures that no tokens
+ever leave the organization's internal network.
+
+To deploy a custom instance of the Permissionizer Server, follow these steps:
+
+1. **Create a GitHub App**
+
+   Set up a GitHub App with the required permissions and install it into the
+   desired repository or organization. The only required permission is
+   `contents: read`, that ensures the server can read the
+   `.github/permissionizer.yaml` policy file in the target repository, all other
+   permissions are optional and depend on which permissions you might need to
+   request for cross-repository automations.
+
+2. **Configure the Server**
+
+   Add the GitHub App details to the `config/permissionizer-server.yaml` file or
+   use environment variables (refer to `config/.env` for supported variables).
+
+3. **Run the Server**
+
+   Use the official Docker image `ghcr.io/permissionizer/server:latest` to
+   deploy the server. Mount the configuration file or pass the required
+   environment variables.
+
+4. **Integrate with `permissionizer/request-token`**
+
+   When using the `permissionizer/request-token` action, specify the custom
+   server URL in the `permissionizer-server` input:
+
    ```yaml
    - id: request-token
      uses: permissionizer/request-token@v1
@@ -15,8 +46,8 @@ This is a server for [Permissionizer App](TODO), a GitHub OIDC provider that iss
        permissionizer-server: https://permissionizer.mycompany.com
        target-repository: permissionizer/server
        permissions: |
-        contents: read
-        issues: write
+         contents: read
+         issues: write
    ```
   
 ## Local development
