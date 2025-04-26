@@ -3,6 +3,7 @@ package policy
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"server/types"
 	"server/util"
@@ -25,14 +26,14 @@ func MatchTargetRepositoryPolicy(requestor *types.TokenRequestor, repositoryPoli
 				Error: err.Error(),
 			}
 		}
-		if policy.Ref != nil && *policy.Ref != requestor.Ref {
+		if policy.Ref != nil && !refMatch(policy, requestor.Ref) {
 			if mostMatchingPolicyPriority < 1 {
 				mostMatchingPolicyError = &types.PolicyError{Type: types.RepositoryDoesNotAllowAccessFromRef}
 				mostMatchingPolicyPriority = 1
 			}
 			continue
 		}
-		if policy.WorkflowRef != nil && *policy.WorkflowRef != requestor.WorkflowRef {
+		if policy.WorkflowRef != nil && !workflowRefMatch(policy, requestor.WorkflowRef) {
 			if mostMatchingPolicyPriority < 2 {
 				mostMatchingPolicyError = &types.PolicyError{Type: types.RepositoryDoesNotAllowAccessFromWorkflowRef}
 				mostMatchingPolicyPriority = 2
@@ -57,6 +58,75 @@ func MatchTargetRepositoryPolicy(requestor *types.TokenRequestor, repositoryPoli
 		mostMatchingPolicyError = &types.PolicyError{Type: types.RepositoryDoesNotAllowAccess}
 	}
 	return mostMatchingPolicyError
+}
+
+func refMatch(policy types.AllowPolicy, ref string) bool {
+	policyRef := *policy.Ref
+	if ref == policyRef {
+		return true
+	}
+
+	// Check for wildcard matching (e.g., refs/tags/v*)
+	matched, err := filepath.Match(policyRef, ref)
+	if err == nil && matched {
+		return true
+	}
+
+	if strings.HasPrefix(ref, "refs/heads/") && refMatch(policy, strings.TrimPrefix(ref, "refs/heads/")) {
+		return true
+	}
+
+	if strings.HasPrefix(ref, "refs/tags/") && refMatch(policy, strings.TrimPrefix(ref, "refs/tags/")) {
+		return true
+	}
+
+	return false
+}
+
+// workflowRefMatch checks if the workflowRef matches the policy's workflowRef.
+// while the requestor always uses complete ref, a policy can use an incomplete workflowRef that can match it
+// 1. full: org/repo/.github/workflows/release.yaml@refs/heads/main
+// 2. workflow without ref: org/repo/.github/workflows/release.yaml
+// 3. wildcard with ref: org/repo/.github/workflows/release-*.yaml@refs/heads/main
+// 4. wildcard without ref: org/repo/.github/workflows/release-*.yaml
+// 5. wildcard in both places: org/repo/.github/workflows/release-*.yaml@refs/heads/*
+// 6. any of the above, without the org/repo prefix
+func workflowRefMatch(policy types.AllowPolicy, workflowRef string) bool {
+	policyWorkflowRef := *policy.WorkflowRef
+	if workflowRef == policyWorkflowRef {
+		return true
+	}
+	workflowParts := strings.SplitN(workflowRef, "@", 2)
+	workflowFile := workflowParts[0]
+	workflowFileRef := workflowParts[1]
+
+	policyParts := strings.SplitN(policyWorkflowRef, "@", 2)
+	policyWorkflowFile := policyParts[0]
+	policyWorkflowFileRef := ""
+	if len(policyParts) > 1 {
+		policyWorkflowFileRef = policyParts[1]
+	}
+
+	// Check for wildcard matching (e.g., .github/workflows/release-*.yaml)
+	matched, err := filepath.Match(policyWorkflowFile, workflowFile)
+	if err == nil && matched {
+		if policyWorkflowFileRef == "" {
+			return true
+		}
+		// Check for wildcard matching (e.g., refs/heads/*)
+		matchedRef, err := filepath.Match(policyWorkflowFileRef, workflowFileRef)
+		if err == nil && matchedRef {
+			return true
+		}
+	}
+
+	// Allow a workflow within the same repository
+	if strings.HasPrefix(workflowRef, policy.Repository) {
+		workflowRef = workflowRef[len(policy.Repository)+1:]
+		return workflowRefMatch(policy, workflowRef)
+	}
+
+	return false
 }
 
 func CheckInstallationPermissions(installationPermissions, requestedPermissions *github.InstallationPermissions) error {
