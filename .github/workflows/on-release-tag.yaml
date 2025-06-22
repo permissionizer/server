@@ -6,6 +6,7 @@ on:
 
 jobs:
   docker:
+    if: ${{ github.repository == 'permissionizer/server' }}
     permissions:
       contents: read
       packages: write
@@ -14,4 +15,15 @@ jobs:
     uses: ./.github/workflows/reusable-docker-build.yaml
     with:
       push: true
+
+  deploy:
+    if: ${{ github.repository == 'permissionizer/server' }}
+    needs: docker
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/reusable-deploy-cloud-run.yaml
+    secrets: inherit
+    with:
+      image: ${{ needs.docker.outputs.tags }}
 

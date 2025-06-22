@@ -44,6 +44,7 @@ jobs:
           config: ./.testcoverage.yml
 
   docker:
+    if: ${{ github.repository == 'permissionizer/server' }}
     needs: build
     permissions:
       contents: read
@@ -53,3 +54,14 @@ jobs:
     uses: ./.github/workflows/reusable-docker-build.yaml
     with:
       push: ${{ github.event_name != 'pull_request' }}
+
+  deploy:
+    if: ${{ github.repository == 'permissionizer/server' && github.event_name != 'pull_request' }}
+    needs: docker
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/reusable-deploy-cloud-run.yaml
+    secrets: inherit
+    with:
+      image: permissionizer/server@sha256:${{ needs.docker.outputs.digest }}

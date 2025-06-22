@@ -1,0 +1,32 @@
+name: Deploy to Cloud Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: Image tag to deploy
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      image:
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCLOUD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCLOUD_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: permissionizer-server
+          region: europe-west4
+          image: europe-west4-docker.pkg.dev/permissionizer/ghcr/{{ inputs.image }}
