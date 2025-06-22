@@ -19,6 +19,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    environment: permissionizer.app
+    concurrency: permissionizer.app
     steps:
       - uses: actions/checkout@v4
 
