@@ -344,6 +344,8 @@ func (a *PermissionizerApi) validateRepositoryPolicy(checkSuiteEvent *github.Che
 	createdAt := checkSuiteEvent.GetCheckSuite().GetCreatedAt()
 	org := checkSuiteEvent.GetRepo().GetOwner().GetLogin()
 	repository := checkSuiteEvent.GetRepo().GetName()
+	beforeSha := checkSuiteEvent.GetCheckSuite().GetBeforeSHA()
+	headSha := checkSuiteEvent.GetCheckSuite().GetHeadSHA()
 
 	ctx := context.Background()
 
@@ -359,12 +361,23 @@ func (a *PermissionizerApi) validateRepositoryPolicy(checkSuiteEvent *github.Che
 		return
 	}
 	client := github.NewClient(nil).WithAuthToken(*permissionizerToken.Token)
-	comparison, _, err := client.Repositories.CompareCommits(ctx, org, repository, checkSuiteEvent.GetCheckSuite().GetBeforeSHA(), checkSuiteEvent.GetCheckSuite().GetAfterSHA(), nil)
-	if err != nil {
-		a.logger.Errorw("Failed to compare commits for repository policy validation", "org", org, "repository", repository, "error", err)
-		return
+	var files []*github.CommitFile
+	if beforeSha != "0000000000000000000000000000000000000000" {
+		comparison, _, err := client.Repositories.CompareCommits(ctx, org, repository, beforeSha, headSha, nil)
+		if err != nil {
+			a.logger.Errorw("Failed to compare commits for repository policy validation", "org", org, "repository", repository, "before", beforeSha, "head", headSha, "error", err)
+			return
+		}
+		files = comparison.Files
+	} else {
+		commit, _, err := client.Repositories.GetCommit(ctx, org, repository, headSha, nil)
+		if err != nil {
+			a.logger.Errorw("Failed to get commit for repository policy validation", "org", org, "repository", repository, "head", headSha, "error", err)
+			return
+		}
+		files = commit.Files
 	}
-	permissionizerPolicyChanged := slices.ContainsFunc(comparison.Files, func(file *github.CommitFile) bool {
+	permissionizerPolicyChanged := slices.ContainsFunc(files, func(file *github.CommitFile) bool {
 		return a.isPermissionizerPolicyFile(file.GetFilename())
 	})
 
@@ -394,7 +407,7 @@ func (a *PermissionizerApi) validateRepositoryPolicy(checkSuiteEvent *github.Che
 	if validationError != nil {
 		_, _, err := client.Checks.CreateCheckRun(ctx, org, repository, github.CreateCheckRunOptions{
 			Name:        policyFile,
-			HeadSHA:     checkSuiteEvent.GetCheckSuite().GetHeadSHA(),
+			HeadSHA:     headSha,
 			Status:      util.Ptr("completed"),
 			Conclusion:  util.Ptr("failure"),
 			StartedAt:   &createdAt,
@@ -418,7 +431,7 @@ Please check documentation at [permissionizer/request-token](https://github.com/
 	} else {
 		_, _, err := client.Checks.CreateCheckRun(ctx, org, repository, github.CreateCheckRunOptions{
 			Name:        policyFile,
-			HeadSHA:     checkSuiteEvent.GetCheckSuite().GetHeadSHA(),
+			HeadSHA:     headSha,
 			Status:      util.Ptr("completed"),
 			Conclusion:  util.Ptr("success"),
 			StartedAt:   &createdAt,
