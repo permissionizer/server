@@ -64,4 +64,5 @@ jobs:
     uses: ./.github/workflows/reusable-deploy-cloud-run.yaml
     secrets: inherit
     with:
-      image: permissionizer/server@sha256:${{ needs.docker.outputs.digest }}
+      # Using the digest instead of tag 'main' to ensure Cloud Run does not deploy the old image
+      image: permissionizer/server@${{ needs.docker.outputs.digest }}
