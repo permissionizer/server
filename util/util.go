@@ -45,6 +45,7 @@ func GenerateUnsignedIDToken(audience string, repository string, ref string, wor
 
 func ParseRepository(repository string) (string, string) {
 	parts := strings.SplitN(repository, "/", 2)
+	// test
 	return parts[0], parts[1]
 }
 
