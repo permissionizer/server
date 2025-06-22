@@ -365,82 +365,83 @@ func (a *PermissionizerApi) validateRepositoryPolicy(checkSuiteEvent *github.Che
 		return
 	}
 	permissionizerPolicyChanged := slices.ContainsFunc(comparison.Files, func(file *github.CommitFile) bool {
-		return a.isPermissionizerConfigFile(file.GetFilename())
+		return a.isPermissionizerPolicyFile(file.GetFilename())
 	})
 
-	if permissionizerPolicyChanged {
-		repositoryPolicy, policyFile, err := a.fetchRepositoryPolicy(ctx, permissionizerToken, org, repository, &github.RepositoryContentGetOptions{
-			Ref: checkSuiteEvent.GetCheckSuite().GetAfterSHA(),
-		})
-		validationError := err
-		if validationError == nil {
-			allowedPermissions := make(map[string]string)
-			for _, allow := range repositoryPolicy.Allow {
-				for permission, access := range allow.Permissions {
-					existingAccess := allowedPermissions[permission]
-					if existingAccess == "" || existingAccess == "none" || (existingAccess == "read" && access == "write") {
-						allowedPermissions[permission] = access
-					}
+	if !permissionizerPolicyChanged {
+		return
+	}
+	repositoryPolicy, policyFile, err := a.fetchRepositoryPolicy(ctx, permissionizerToken, org, repository, &github.RepositoryContentGetOptions{
+		Ref: checkSuiteEvent.GetCheckSuite().GetAfterSHA(),
+	})
+	validationError := err
+	if validationError == nil {
+		allowedPermissions := make(map[string]string)
+		for _, allow := range repositoryPolicy.Allow {
+			for permission, access := range allow.Permissions {
+				existingAccess := allowedPermissions[permission]
+				if existingAccess == "" || existingAccess == "none" || (existingAccess == "read" && access == "write") {
+					allowedPermissions[permission] = access
 				}
 			}
-			requestedPermissions, err := util.MapToInstallationPermissions(allowedPermissions)
-			err = policy.CheckInstallationPermissions(checkSuiteEvent.GetInstallation().GetPermissions(), requestedPermissions)
-			if err != nil {
-				validationError = err
-			}
 		}
-		if validationError != nil {
-			_, _, err := client.Checks.CreateCheckRun(ctx, org, repository, github.CreateCheckRunOptions{
-				Name:        policyFile,
-				HeadSHA:     checkSuiteEvent.GetCheckSuite().GetHeadSHA(),
-				Status:      util.Ptr("completed"),
-				Conclusion:  util.Ptr("failure"),
-				StartedAt:   &createdAt,
-				CompletedAt: &github.Timestamp{Time: time.Now()},
-				DetailsURL:  util.Ptr("https://github.com/marketplace/actions/permissionizer-request-token"),
-				Output: &github.CheckRunOutput{
-					Title: util.Ptr("Failed to validate Permissionizer policy file"),
-					Summary: util.Ptr(`
+		requestedPermissions, err := util.MapToInstallationPermissions(allowedPermissions)
+		err = policy.CheckInstallationPermissions(checkSuiteEvent.GetInstallation().GetPermissions(), requestedPermissions)
+		if err != nil {
+			validationError = err
+		}
+	}
+	if validationError != nil {
+		_, _, err := client.Checks.CreateCheckRun(ctx, org, repository, github.CreateCheckRunOptions{
+			Name:        policyFile,
+			HeadSHA:     checkSuiteEvent.GetCheckSuite().GetHeadSHA(),
+			Status:      util.Ptr("completed"),
+			Conclusion:  util.Ptr("failure"),
+			StartedAt:   &createdAt,
+			CompletedAt: &github.Timestamp{Time: time.Now()},
+			DetailsURL:  util.Ptr("https://github.com/marketplace/actions/permissionizer-request-token"),
+			Output: &github.CheckRunOutput{
+				Title: util.Ptr("Failed to validate Permissionizer policy file"),
+				Summary: util.Ptr(`
 Failed to validate Permissionizer policy file ` + fmt.Sprintf("`%s`", policyFile) + `.
 
 Please check documentation at [permissionizer/request-token](https://github.com/marketplace/actions/permissionizer-request-token) for more information.
 `),
-					Text: util.Ptr(fmt.Sprintf("Error: %s", validationError.Error())),
-				},
-			})
-			if err != nil {
-				a.logger.Errorw("Failed to create check run for repository policy", "org", org, "repository", repository, "error", err)
-				return
-			}
-			a.logger.Infow("Created failed policy validation check", "org", org, "repository", repository, "error", err)
-		} else {
-			_, _, err := client.Checks.CreateCheckRun(ctx, org, repository, github.CreateCheckRunOptions{
-				Name:        policyFile,
-				HeadSHA:     checkSuiteEvent.GetCheckSuite().GetHeadSHA(),
-				Status:      util.Ptr("completed"),
-				Conclusion:  util.Ptr("success"),
-				StartedAt:   &createdAt,
-				CompletedAt: &github.Timestamp{Time: time.Now()},
-				DetailsURL:  util.Ptr("https://github.com/marketplace/actions/permissionizer-request-token"),
-				Output: &github.CheckRunOutput{
-					Title: util.Ptr("Successfully validated Permissionizer policy file"),
-					Summary: util.Ptr(`
+				Text: util.Ptr(fmt.Sprintf("Error: %s", validationError.Error())),
+			},
+		})
+		if err != nil {
+			a.logger.Errorw("Failed to create check run for repository policy", "org", org, "repository", repository, "error", err)
+			return
+		}
+		a.logger.Infow("Created failed policy validation check", "org", org, "repository", repository, "error", err)
+	} else {
+		_, _, err := client.Checks.CreateCheckRun(ctx, org, repository, github.CreateCheckRunOptions{
+			Name:        policyFile,
+			HeadSHA:     checkSuiteEvent.GetCheckSuite().GetHeadSHA(),
+			Status:      util.Ptr("completed"),
+			Conclusion:  util.Ptr("success"),
+			StartedAt:   &createdAt,
+			CompletedAt: &github.Timestamp{Time: time.Now()},
+			DetailsURL:  util.Ptr("https://github.com/marketplace/actions/permissionizer-request-token"),
+			Output: &github.CheckRunOutput{
+				Title: util.Ptr("Successfully validated Permissionizer policy file"),
+				Summary: util.Ptr(`
 Permissionizer policy file ` + fmt.Sprintf("`%s`", policyFile) + ` has been successfully validated.
 
 You can now issue tokens for this repository using ` + "`permissionizer/request-token@v1`" + ` GitHub Action. Please check documentation at [permissionizer/request-token](https://github.com/marketplace/actions/permissionizer-request-token) for more information.
 `),
-				},
-			})
-			if err != nil {
-				a.logger.Errorw("Failed to create check run for repository policy", "org", org, "repository", repository, "error", err)
-				return
-			}
-			a.logger.Infow("Created successful policy validation check", "org", org, "repository", repository, "error", err)
+			},
+		})
+		if err != nil {
+			a.logger.Errorw("Failed to create check run for repository policy", "org", org, "repository", repository, "error", err)
+			return
 		}
+		a.logger.Infow("Created successful policy validation check", "org", org, "repository", repository, "error", err)
 	}
 }
 
-func (a *PermissionizerApi) isPermissionizerConfigFile(file string) bool {
+func (a *PermissionizerApi) isPermissionizerPolicyFile(file string) bool {
 	return file == ".github/permissionizer.yaml" || file == ".github/permissionizer.yml"
 }
 
