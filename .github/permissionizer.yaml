@@ -5,4 +5,4 @@ allow:
       contents: read
       issues: write
 
-test3
+test4
