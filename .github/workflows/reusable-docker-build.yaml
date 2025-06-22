@@ -61,6 +61,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - uses: actions/attest-build-provenance@v2
+        if: ${{ inputs.push }}
         with:
           subject-name: ghcr.io/permissionizer/server
           subject-digest: ${{ steps.push.outputs.digest }}
