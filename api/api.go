@@ -109,13 +109,13 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 			})
 			return
 		}
-		org, repository := parseRepository(targetRepository)
+		org, repository := util.ParseRepository(targetRepository)
 		if targetOrg == "" {
 			targetOrg = org
 		} else if targetOrg != org {
 			abortWithProblem(c, nil, &types.ProblemDetail{
 				Type:   string(types.RepositoriesMustBelongToSameOrg),
-				Detail: "All target targetRepositories must belong to the same organization",
+				Detail: "All target repositories must belong to the same organization",
 				Status: http.StatusBadRequest,
 			})
 			return
@@ -181,7 +181,7 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 
 		policyError := policy.MatchTargetRepositoryPolicy(requestor, targetRepositoryPolicy, requestedPermissions)
 		if policyError != nil {
-			abortWithErrorType(c, requestor, targetRepository, types.RepositoryMisconfigured, nil, policyError.Error)
+			abortWithErrorType(c, requestor, targetRepository, policyError.Type, nil, policyError.Error)
 			return
 		}
 	}
@@ -261,11 +261,6 @@ func ParsePolicy(content string, org string, repository string) (*types.Reposito
 		return nil, fmt.Errorf("mismatching 'self' clause: '%s' != '%s/%s'", repositoryPolicy.Self, org, repository)
 	}
 	return &repositoryPolicy, nil
-}
-
-func parseRepository(targetRepository string) (string, string) {
-	parts := strings.SplitN(targetRepository, "/", 2)
-	return parts[0], parts[1]
 }
 
 func (a *PermissionizerApi) HandleWebhook(c *gin.Context) {

@@ -16,7 +16,7 @@ func MatchTargetRepositoryPolicy(requestor *types.TokenRequestor, repositoryPoli
 	var mostMatchingPolicyError *types.PolicyError
 	mostMatchingPolicyPriority := 0
 	for _, policy := range repositoryPolicy.Allow {
-		if policy.Repository != requestor.Repository {
+		if !repositoryMatch(requestor, policy) {
 			continue
 		}
 		policyPermissions, err := util.MapToInstallationPermissions(policy.Permissions)
@@ -61,6 +61,15 @@ func MatchTargetRepositoryPolicy(requestor *types.TokenRequestor, repositoryPoli
 		}
 	}
 	return mostMatchingPolicyError
+}
+
+func repositoryMatch(requestor *types.TokenRequestor, policy types.AllowPolicy) bool {
+	policyOrg, policyRepositoryName := util.ParseRepository(policy.Repository)
+	if policyRepositoryName == "*" {
+		requestorOrg, _ := util.ParseRepository(requestor.Repository)
+		return requestorOrg == policyOrg
+	}
+	return policy.Repository == requestor.Repository
 }
 
 func refMatch(policy types.AllowPolicy, ref string) bool {

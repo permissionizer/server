@@ -389,6 +389,64 @@ func TestWorkflowRefMatch(t *testing.T) {
 	}
 }
 
+func TestMatchOrgWildcard(t *testing.T) {
+	gomega.RegisterTestingT(t)
+
+	repositoryPolicy := &types.RepositoryPolicy{
+		Self: "permissionizer/target-repository",
+		Allow: []types.AllowPolicy{
+			allowPolicy(&types.AllowPolicy{
+				Repository: "permissionizer/*",
+			}),
+		},
+	}
+	tests := []struct {
+		name        string
+		requestor   *types.TokenRequestor
+		permissions map[string]string
+		allowed     bool
+	}{
+		{
+			name: "allow from the same repo",
+			requestor: &types.TokenRequestor{
+				Repository: "permissionizer/target-repository",
+			},
+			permissions: defaultPermissions,
+			allowed:     true,
+		},
+		{
+			name: "allow from another repo",
+			requestor: &types.TokenRequestor{
+				Repository: "permissionizer/requesting-repository",
+			},
+			permissions: defaultPermissions,
+			allowed:     true,
+		},
+		{
+			name: "deny from different org",
+			requestor: &types.TokenRequestor{
+				Repository: "org/repo",
+			},
+			permissions: defaultPermissions,
+			allowed:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requestor := testRequestor(tt.requestor)
+
+			policyError := policy.MatchTargetRepositoryPolicy(requestor, repositoryPolicy, convertPermissions(tt.permissions))
+			if tt.allowed {
+				gomega.Expect(policyError).To(gomega.BeNil())
+			} else {
+				gomega.Expect(policyError).To(gomega.Not(gomega.BeNil()))
+				gomega.Expect(policyError.Type).To(gomega.Not(gomega.BeNil()))
+			}
+		})
+	}
+}
+
 func allowPolicy(incomplete ...*types.AllowPolicy) types.AllowPolicy {
 	var value *types.AllowPolicy
 	if len(incomplete) == 1 && incomplete[0] != nil {

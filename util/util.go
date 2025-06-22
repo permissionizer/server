@@ -43,6 +43,11 @@ func GenerateUnsignedIDToken(audience string, repository string, ref string, wor
 	return tokenString
 }
 
+func ParseRepository(repository string) (string, string) {
+	parts := strings.SplitN(repository, "/", 2)
+	return parts[0], parts[1]
+}
+
 func MapToInstallationPermissions(permissions map[string]string) (*github.InstallationPermissions, error) {
 	installationPermissions := &github.InstallationPermissions{}
 	permissionsReflectElem := reflect.ValueOf(installationPermissions).Elem()
