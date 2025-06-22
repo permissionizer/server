@@ -23,7 +23,7 @@ func MatchTargetRepositoryPolicy(requestor *types.TokenRequestor, repositoryPoli
 		if err != nil {
 			return &types.PolicyError{
 				Type:  types.RepositoryMisconfigured,
-				Error: err.Error(),
+				Error: fmt.Sprintf("Access file '.github/permissionizer.yaml' is invalid: %s", err.Error()),
 			}
 		}
 		if policy.Ref != nil && !refMatch(policy, requestor.Ref) {
@@ -55,7 +55,10 @@ func MatchTargetRepositoryPolicy(requestor *types.TokenRequestor, repositoryPoli
 		return nil
 	}
 	if mostMatchingPolicyError == nil {
-		mostMatchingPolicyError = &types.PolicyError{Type: types.RepositoryDoesNotAllowAccess}
+		mostMatchingPolicyError = &types.PolicyError{
+			Type:  types.RepositoryDoesNotAllowAccess,
+			Error: "Issuing a token to the same repository requires explicit policy defined in the '.github/permissionizer.yaml' file.",
+		}
 	}
 	return mostMatchingPolicyError
 }

@@ -29,5 +29,4 @@ allow:
 		"contents": "read",
 		"issues":   "write",
 	}))
-
 }

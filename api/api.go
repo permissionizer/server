@@ -89,27 +89,39 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 		return
 	}
 
-	if len(request.TargetRepositories) != 1 {
+	if len(request.TargetRepositories) == 0 {
 		abortWithProblem(c, nil, &types.ProblemDetail{
 			Type:   string(types.InvalidRequest),
-			Detail: "Currently, only a single target repository is allowed",
+			Detail: "Target targetRepositories must be specified",
 			Status: http.StatusBadRequest,
 		})
 		return
 	}
 
-	targetRepository := request.TargetRepositories[0]
-
-	if !repositoryPattern.MatchString(targetRepository) {
-		abortWithProblem(c, nil, &types.ProblemDetail{
-			Type:   string(types.InvalidRequest),
-			Detail: fmt.Sprintf("Invalid repository '%s'", targetRepository),
-			Status: http.StatusBadRequest,
-		})
-		return
+	var targetOrg = ""
+	var targetRepositories []string
+	for _, targetRepository := range request.TargetRepositories {
+		if !repositoryPattern.MatchString(targetRepository) {
+			abortWithProblem(c, nil, &types.ProblemDetail{
+				Type:   string(types.InvalidRequest),
+				Detail: fmt.Sprintf("Invalid repository '%s'", targetRepository),
+				Status: http.StatusBadRequest,
+			})
+			return
+		}
+		org, repository := parseRepository(targetRepository)
+		if targetOrg == "" {
+			targetOrg = org
+		} else if targetOrg != org {
+			abortWithProblem(c, nil, &types.ProblemDetail{
+				Type:   string(types.RepositoriesMustBelongToSameOrg),
+				Detail: "All target targetRepositories must belong to the same organization",
+				Status: http.StatusBadRequest,
+			})
+			return
+		}
+		targetRepositories = append(targetRepositories, repository)
 	}
-
-	org, repository := parseRepository(targetRepository)
 
 	requestedPermissions, err := util.MapToInstallationPermissions(request.Permissions)
 	if err != nil {
@@ -121,18 +133,32 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 		return
 	}
 
-	installation, _, err := a.client.Apps.FindRepositoryInstallation(c.Request.Context(), org, repository)
-	if err != nil || installation.GetPermissions().GetContents() == "none" {
-		abortWithProblem(c, err, &types.ProblemDetail{
-			Type:   string(types.PermissionizerNotInstalled),
-			Detail: fmt.Sprintf("Repository '%s' does not have Permissioniner app installed or does not allow issuing tokens", targetRepository),
-			Status: http.StatusUnauthorized,
-		})
-		return
+	var installation *github.Installation
+	if len(targetRepositories) == 1 {
+		targetRepository := targetRepositories[0]
+		installation, _, err = a.client.Apps.FindRepositoryInstallation(c.Request.Context(), targetOrg, targetRepository)
+		if err != nil || installation.GetPermissions().GetContents() == "none" {
+			abortWithProblem(c, err, &types.ProblemDetail{
+				Type:   string(types.PermissionizerNotInstalled),
+				Detail: fmt.Sprintf("Repository '%s' does not have Permissioniner App installed or does not allow issuing tokens", targetRepository),
+				Status: http.StatusUnauthorized,
+			})
+			return
+		}
+	} else {
+		installation, _, err = a.client.Apps.FindOrganizationInstallation(c.Request.Context(), targetOrg)
+		if err != nil || installation.GetPermissions().GetContents() == "none" {
+			abortWithProblem(c, err, &types.ProblemDetail{
+				Type:   string(types.PermissionizerNotInstalled),
+				Detail: fmt.Sprintf("Organization '%s' does not have Permissioniner App installed or does not allow issuing tokens", targetOrg),
+				Status: http.StatusUnauthorized,
+			})
+			return
+		}
 	}
 
 	permissionizerToken, _, err := a.client.Apps.CreateInstallationToken(c.Request.Context(), *installation.ID, &github.InstallationTokenOptions{
-		Repositories: []string{repository},
+		Repositories: targetRepositories,
 		Permissions: &github.InstallationPermissions{
 			Contents: util.Ptr("read"),
 		},
@@ -140,22 +166,24 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 	if err != nil {
 		abortWithProblem(c, err, &types.ProblemDetail{
 			Type:   string(types.PermissionizerNotSufficientPermissions),
-			Detail: fmt.Sprintf("Permissionizer App does not have sufficient permissions to issue token: %s", err),
+			Detail: fmt.Sprintf("Permissionizer App does not have sufficient permissions to issue a token: %s", err),
 			Status: http.StatusUnauthorized,
 		})
 		return
 	}
 
-	targetRepositoryPolicy, err := a.fetchRepositoryPolicy(c, permissionizerToken, org, repository)
-	if err != nil {
-		abortWithProblem(c, err, createProblemDetail(requestor, targetRepository, types.RepositoryMisconfigured, err.Error()))
-		return
-	}
+	for _, targetRepository := range targetRepositories {
+		targetRepositoryPolicy, err := a.fetchRepositoryPolicy(c, permissionizerToken, targetOrg, targetRepository)
+		if err != nil {
+			abortWithErrorType(c, requestor, targetRepository, types.RepositoryMisconfigured, err, fmt.Sprintf("Access file '.github/permissionizer.yaml' is invalid: %s", err.Error()))
+			return
+		}
 
-	policyError := policy.MatchTargetRepositoryPolicy(requestor, targetRepositoryPolicy, requestedPermissions)
-	if policyError != nil {
-		abortWithProblem(c, err, createProblemDetail(requestor, targetRepository, policyError.Type, policyError.Error))
-		return
+		policyError := policy.MatchTargetRepositoryPolicy(requestor, targetRepositoryPolicy, requestedPermissions)
+		if policyError != nil {
+			abortWithErrorType(c, requestor, targetRepository, types.RepositoryMisconfigured, nil, policyError.Error)
+			return
+		}
 	}
 
 	// while this can be done before checking the policy itself, it's better not to leak the permissions of the app
@@ -173,7 +201,7 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 	a.logger.Infow("Issuing a scoped token", "requestor", requestor, "request", request)
 
 	scopedToken, _, err := a.client.Apps.CreateInstallationToken(c.Request.Context(), *installation.ID, &github.InstallationTokenOptions{
-		Repositories: []string{repository},
+		Repositories: targetRepositories,
 		Permissions:  requestedPermissions,
 	})
 	if err != nil {
@@ -186,16 +214,16 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 		return
 	}
 
-	repositories := []string{}
+	var tokenRepositories []string
 	for _, tokenRepository := range scopedToken.Repositories {
-		repositories = append(repositories, tokenRepository.GetFullName())
+		tokenRepositories = append(tokenRepositories, tokenRepository.GetFullName())
 	}
 
 	c.IndentedJSON(http.StatusOK, types.IssueTokenResponse{
 		Token:        *scopedToken.Token,
 		ExpiresAt:    scopedToken.ExpiresAt.GetTime(),
 		Permissions:  scopedToken.Permissions,
-		Repositories: repositories,
+		Repositories: tokenRepositories,
 		IssuedBy:     requestor,
 	})
 }
@@ -204,11 +232,14 @@ func (a *PermissionizerApi) fetchRepositoryPolicy(c *gin.Context, permissionizer
 	client := github.NewClient(nil).WithAuthToken(*permissionizerToken.Token)
 
 	permissionizerAccessFileContent, _, _, err := client.Repositories.GetContents(c.Request.Context(), org, repository, ".github/permissionizer.yaml", nil)
-	if err != nil || permissionizerAccessFileContent == nil {
-		if err == nil {
-			err = errors.New("permissionizer.yaml is not a file")
-		}
+	if err != nil {
+		permissionizerAccessFileContent, _, _, err = client.Repositories.GetContents(c.Request.Context(), org, repository, ".github/permissionizer.yml", nil)
+	}
+	if err != nil {
 		return nil, err
+	}
+	if permissionizerAccessFileContent == nil {
+		return nil, errors.New("permissionizer.yaml is not a file")
 	}
 
 	permissionizerAccessFile, err := permissionizerAccessFileContent.GetContent()
@@ -241,47 +272,6 @@ func (a *PermissionizerApi) HandleWebhook(c *gin.Context) {
 	c.Status(http.StatusNotImplemented)
 }
 
-func createProblemDetail(requestor *types.TokenRequestor, targetRepository string, errorType types.ErrorType, errorDetails string) *types.ProblemDetail {
-	detail := ""
-	status := http.StatusUnauthorized
-	switch errorType {
-	case types.RepositoryMisconfigured:
-		detail = fmt.Sprintf("The repository '%s' defines invalid access file.", targetRepository)
-		if requestor.Repository == targetRepository {
-			detail += fmt.Sprintf("\nAccess file '.github/permissionizer.yaml' is invalid: %s", errorDetails)
-		} else {
-			detail += "\nContact the repository owners to fix '.github/permissionizer.yaml' access file."
-		}
-	case types.RepositoryDoesNotAllowAccess:
-		detail = fmt.Sprintf("The repository '%s' does not allow issuing token for '%s'.", targetRepository, requestor.Repository)
-		if requestor.Repository == targetRepository {
-			detail += "\nIssuing a token to the same repository requires explicit policy defined in the '.github/permissionizer.yaml' file."
-		} else {
-			detail += "\nContact the repository owners to define a policy allowing the access in the '.github/permissionizer.yaml' file."
-		}
-	case types.RepositoryDoesNotAllowAccessFromRef:
-		detail = fmt.Sprintf("The repository '%s' does not allow issuing token for '%s' from the ref '%s'.", targetRepository, requestor.Repository, requestor.Ref)
-		if requestor.Repository != targetRepository {
-			detail += "\nContact the repository owners to define a policy allowing the access in the '.github/permissionizer.yaml' file."
-		}
-	case types.RepositoryDoesNotAllowAccessFromWorkflowRef:
-		detail = fmt.Sprintf("The repository '%s' does not allow issuing token for '%s' from the workflow ref '%s'.", targetRepository, requestor.Repository, requestor.WorkflowRef)
-		if requestor.Repository != targetRepository {
-			detail += "\nContact the repository owners to define a policy allowing the access in the '.github/permissionizer.yaml' file."
-		}
-	case types.RepositoryDoesNotAllowPermissions:
-		detail = fmt.Sprintf("The repository '%s' does not allow issuing token for '%s' with the permissions: %s", targetRepository, requestor.Repository, errorDetails)
-		if requestor.Repository != targetRepository {
-			detail += "\nContact the repository owners to define a policy allowing the access in the '.github/permissionizer.yaml' file."
-		}
-	}
-	return &types.ProblemDetail{
-		Type:   string(errorType),
-		Detail: detail,
-		Status: status,
-	}
-}
-
 func abortWithProblem(c *gin.Context, err error, pd *types.ProblemDetail) {
 	if err != nil {
 		_ = c.Error(err)
@@ -300,6 +290,37 @@ func abortWithInvalidToken(c *gin.Context, err error) {
 		Type:   string(types.InvalidIDToken),
 		Detail: err.Error() + ". Use 'actions/request-token@1' to request access token.",
 		Status: http.StatusUnauthorized,
+	})
+}
+
+func abortWithErrorType(c *gin.Context, requestor *types.TokenRequestor, targetRepository string, errorType types.ErrorType, err error, errorDetails string) {
+	detail := ""
+	status := http.StatusUnauthorized
+	switch errorType {
+	case types.RepositoryMisconfigured:
+		detail = fmt.Sprintf("The repository '%s' defines invalid access file.", targetRepository)
+	case types.RepositoryDoesNotAllowAccess:
+		detail = fmt.Sprintf("The repository '%s' does not allow issuing token for '%s'.", targetRepository, requestor.Repository)
+	case types.RepositoryDoesNotAllowAccessFromRef:
+		detail = fmt.Sprintf("The repository '%s' does not allow issuing token for '%s' from the ref '%s'.", targetRepository, requestor.Repository, requestor.Ref)
+	case types.RepositoryDoesNotAllowAccessFromWorkflowRef:
+		detail = fmt.Sprintf("The repository '%s' does not allow issuing token for '%s' from the workflow ref '%s'.", targetRepository, requestor.Repository, requestor.WorkflowRef)
+	case types.RepositoryDoesNotAllowPermissions:
+		detail = fmt.Sprintf("The repository '%s' does not allow issuing token for '%s' with the permissions: %s", targetRepository, requestor.Repository, errorDetails)
+	}
+	if requestor.Repository == targetRepository {
+		if errorDetails != "" {
+			detail += "\n" + errorDetails
+		} else if err != nil {
+			detail += "\n" + err.Error()
+		}
+	} else {
+		detail += "\nContact the repository owners to define a policy allowing the access in the '.github/permissionizer.yaml' file."
+	}
+	abortWithProblem(c, err, &types.ProblemDetail{
+		Type:   string(errorType),
+		Detail: detail,
+		Status: status,
 	})
 }
 

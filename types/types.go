@@ -65,6 +65,7 @@ const (
 	RepositoryDoesNotAllowAccessFromRef         ErrorType = "repository_does_not_allow_access_from_ref"
 	RepositoryDoesNotAllowAccessFromWorkflowRef ErrorType = "repository_does_not_allow_access_from_workflow_ref"
 	RepositoryDoesNotAllowPermissions           ErrorType = "repository_does_not_allow_requested_permissions"
+	RepositoriesMustBelongToSameOrg             ErrorType = "repositories_must_belong_to_same_org"
 )
 
 type PermissionsDecision struct {
