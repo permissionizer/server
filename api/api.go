@@ -369,10 +369,27 @@ func (a *PermissionizerApi) validateRepositoryPolicy(checkSuiteEvent *github.Che
 	})
 
 	if permissionizerPolicyChanged {
-		_, policyFile, err := a.fetchRepositoryPolicy(ctx, permissionizerToken, org, repository, &github.RepositoryContentGetOptions{
+		repositoryPolicy, policyFile, err := a.fetchRepositoryPolicy(ctx, permissionizerToken, org, repository, &github.RepositoryContentGetOptions{
 			Ref: checkSuiteEvent.GetCheckSuite().GetAfterSHA(),
 		})
-		if err != nil {
+		validationError := err
+		if validationError == nil {
+			allowedPermissions := make(map[string]string)
+			for _, allow := range repositoryPolicy.Allow {
+				for permission, access := range allow.Permissions {
+					existingAccess := allowedPermissions[permission]
+					if existingAccess == "" || existingAccess == "none" || (existingAccess == "read" && access == "write") {
+						allowedPermissions[permission] = access
+					}
+				}
+			}
+			requestedPermissions, err := util.MapToInstallationPermissions(allowedPermissions)
+			err = policy.CheckInstallationPermissions(checkSuiteEvent.GetInstallation().GetPermissions(), requestedPermissions)
+			if err != nil {
+				validationError = err
+			}
+		}
+		if validationError != nil {
 			_, _, err := client.Checks.CreateCheckRun(ctx, org, repository, github.CreateCheckRunOptions{
 				Name:        policyFile,
 				HeadSHA:     checkSuiteEvent.GetCheckSuite().GetHeadSHA(),
@@ -388,7 +405,7 @@ Failed to validate Permissionizer policy file ` + fmt.Sprintf("`%s`", policyFile
 
 Please check documentation at [permissionizer/request-token](https://github.com/marketplace/actions/permissionizer-request-token) for more information.
 `),
-					Text: util.Ptr(fmt.Sprintf("Error: %s", err.Error())),
+					Text: util.Ptr(fmt.Sprintf("Error: %s", validationError.Error())),
 				},
 			})
 			if err != nil {
