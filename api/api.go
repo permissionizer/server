@@ -399,7 +399,7 @@ func (a *PermissionizerApi) validateRepositoryPolicy(checkSuiteEvent *github.Che
 			}
 		}
 		requestedPermissions, err := util.MapToInstallationPermissions(allowedPermissions)
-		err = policy.CheckInstallationPermissions(checkSuiteEvent.GetInstallation().GetPermissions(), requestedPermissions)
+		err = policy.CheckInstallationPermissions(checkSuiteEvent.GetCheckSuite().GetApp().GetPermissions(), requestedPermissions)
 		if err != nil {
 			validationError = err
 		}
