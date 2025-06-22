@@ -9,11 +9,13 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"gopkg.in/yaml.v3"
+	"io"
 	"net/http"
 	"regexp"
 	"server/policy"
 	"server/types"
 	"server/util"
+	"slices"
 	"strings"
 	"time"
 
@@ -173,7 +175,7 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 	}
 
 	for _, targetRepository := range targetRepositories {
-		targetRepositoryPolicy, err := a.fetchRepositoryPolicy(c, permissionizerToken, targetOrg, targetRepository)
+		targetRepositoryPolicy, _, err := a.fetchRepositoryPolicy(c.Request.Context(), permissionizerToken, targetOrg, targetRepository, nil)
 		if err != nil {
 			abortWithErrorType(c, requestor, targetRepository, types.RepositoryMisconfigured, err, fmt.Sprintf("Access file '.github/permissionizer.yaml' is invalid: %s", err.Error()))
 			return
@@ -228,26 +230,29 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 	})
 }
 
-func (a *PermissionizerApi) fetchRepositoryPolicy(c *gin.Context, permissionizerToken *github.InstallationToken, org string, repository string) (*types.RepositoryPolicy, error) {
+func (a *PermissionizerApi) fetchRepositoryPolicy(ctx context.Context, permissionizerToken *github.InstallationToken, org string, repository string, opts *github.RepositoryContentGetOptions) (*types.RepositoryPolicy, string, error) {
 	client := github.NewClient(nil).WithAuthToken(*permissionizerToken.Token)
 
-	permissionizerAccessFileContent, _, _, err := client.Repositories.GetContents(c.Request.Context(), org, repository, ".github/permissionizer.yaml", nil)
+	policyFile := ".github/permissionizer.yaml"
+	permissionizerAccessFileContent, _, _, err := client.Repositories.GetContents(ctx, org, repository, policyFile, opts)
 	if err != nil {
-		permissionizerAccessFileContent, _, _, err = client.Repositories.GetContents(c.Request.Context(), org, repository, ".github/permissionizer.yml", nil)
+		policyFile = ".github/permissionizer.yml"
+		permissionizerAccessFileContent, _, _, err = client.Repositories.GetContents(ctx, org, repository, policyFile, opts)
 	}
 	if err != nil {
-		return nil, err
+		return nil, ".github/permissionizer.yaml", err
 	}
 	if permissionizerAccessFileContent == nil {
-		return nil, errors.New("permissionizer.yaml is not a file")
+		return nil, policyFile, errors.New("permissionizer.yaml is not a file")
 	}
 
 	permissionizerAccessFile, err := permissionizerAccessFileContent.GetContent()
 	if err != nil {
-		return nil, err
+		return nil, policyFile, err
 	}
 
-	return ParsePolicy(permissionizerAccessFile, org, repository)
+	parsedPolicy, err := ParsePolicy(permissionizerAccessFile, org, repository)
+	return parsedPolicy, policyFile, err
 }
 
 func ParsePolicy(content string, org string, repository string) (*types.RepositoryPolicy, error) {
@@ -264,7 +269,162 @@ func ParsePolicy(content string, org string, repository string) (*types.Reposito
 }
 
 func (a *PermissionizerApi) HandleWebhook(c *gin.Context) {
-	c.Status(http.StatusNotImplemented)
+	event := c.GetHeader("X-GitHub-Event")
+	a.logger.Infow("Received webhook event", "event", event)
+	switch event {
+	case "ping":
+		pingEvent := &github.PingEvent{}
+		err := c.ShouldBindJSON(pingEvent)
+		if err != nil && strings.Contains(err.Error(), "json: unknown field") {
+			// we might receive an event with an unknown field, which is fine
+			err = nil
+		}
+		if err != nil {
+			a.logger.Error("Failed to bind ping event", err)
+			abortWithProblem(c, err, &types.ProblemDetail{
+				Type:   string(types.InvalidWebhook),
+				Detail: "Invalid ping event",
+				Status: http.StatusBadRequest,
+			})
+			return
+		}
+		a.logger.Infow("Received ping pingEvent", "event", pingEvent)
+		c.Status(http.StatusAccepted)
+	case "installation":
+		installationEvent := &github.InstallationEvent{}
+		err := c.ShouldBindJSON(installationEvent)
+		if err != nil && strings.Contains(err.Error(), "json: unknown field") {
+			// we might receive an event with an unknown field, which is fine
+			err = nil
+		}
+		if err != nil {
+			a.logger.Error("Failed to bind installation event", err)
+			abortWithProblem(c, err, &types.ProblemDetail{
+				Type:   string(types.InvalidWebhook),
+				Detail: "Invalid installation event",
+				Status: http.StatusBadRequest,
+			})
+			return
+		}
+		a.logger.Infow("Received installation event", "event", installationEvent)
+	case "check_suite":
+		checkSuiteEvent := &github.CheckSuiteEvent{}
+		err := c.ShouldBindJSON(checkSuiteEvent)
+		if err != nil && strings.Contains(err.Error(), "json: unknown field") {
+			// we might receive an event with an unknown field, which is fine
+			err = nil
+		}
+		if err != nil {
+			a.logger.Error("Failed to bind push event", err)
+			abortWithProblem(c, err, &types.ProblemDetail{
+				Type:   string(types.InvalidWebhook),
+				Detail: "Invalid push event",
+				Status: http.StatusBadRequest,
+			})
+			return
+		}
+		go a.validateRepositoryPolicy(checkSuiteEvent)
+		c.Status(http.StatusAccepted)
+	default:
+		bytes, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			a.logger.Error(err)
+			c.AbortWithStatus(http.StatusInternalServerError)
+		}
+		a.logger.Warnw("Received unsupported event", "event", event, "body", string(bytes))
+		abortWithProblem(c, nil, &types.ProblemDetail{
+			Type:   string(types.InvalidWebhook),
+			Detail: fmt.Sprintf("Unsupported event '%s'", event),
+			Status: http.StatusBadRequest,
+		})
+	}
+}
+
+func (a *PermissionizerApi) validateRepositoryPolicy(checkSuiteEvent *github.CheckSuiteEvent) {
+	createdAt := checkSuiteEvent.GetCheckSuite().GetCreatedAt()
+	org := checkSuiteEvent.GetRepo().GetOwner().GetLogin()
+	repository := checkSuiteEvent.GetRepo().GetName()
+
+	ctx := context.Background()
+
+	permissionizerToken, _, err := a.client.Apps.CreateInstallationToken(ctx, *checkSuiteEvent.GetInstallation().ID, &github.InstallationTokenOptions{
+		Repositories: []string{repository},
+		Permissions: &github.InstallationPermissions{
+			Contents: util.Ptr("read"),
+			Checks:   util.Ptr("write"),
+		},
+	})
+	if err != nil {
+		a.logger.Errorw("Failed to create installation token for repository policy validation", "org", org, "repository", repository, "error", err)
+		return
+	}
+	client := github.NewClient(nil).WithAuthToken(*permissionizerToken.Token)
+	comparison, _, err := client.Repositories.CompareCommits(ctx, org, repository, checkSuiteEvent.GetCheckSuite().GetBeforeSHA(), checkSuiteEvent.GetCheckSuite().GetAfterSHA(), nil)
+	if err != nil {
+		a.logger.Errorw("Failed to compare commits for repository policy validation", "org", org, "repository", repository, "error", err)
+		return
+	}
+	permissionizerPolicyChanged := slices.ContainsFunc(comparison.Files, func(file *github.CommitFile) bool {
+		return a.isPermissionizerConfigFile(file.GetFilename())
+	})
+
+	if permissionizerPolicyChanged {
+		_, policyFile, err := a.fetchRepositoryPolicy(ctx, permissionizerToken, org, repository, &github.RepositoryContentGetOptions{
+			Ref: checkSuiteEvent.GetCheckSuite().GetAfterSHA(),
+		})
+		if err != nil {
+			_, _, err := client.Checks.CreateCheckRun(ctx, org, repository, github.CreateCheckRunOptions{
+				Name:        policyFile,
+				HeadSHA:     checkSuiteEvent.GetCheckSuite().GetHeadSHA(),
+				Status:      util.Ptr("completed"),
+				Conclusion:  util.Ptr("failure"),
+				StartedAt:   &createdAt,
+				CompletedAt: &github.Timestamp{Time: time.Now()},
+				DetailsURL:  util.Ptr("https://github.com/marketplace/actions/permissionizer-request-token"),
+				Output: &github.CheckRunOutput{
+					Title: util.Ptr("Failed to validate Permissionizer policy file"),
+					Summary: util.Ptr(`
+Failed to validate Permissionizer policy file ` + fmt.Sprintf("`%s`", policyFile) + `.
+
+Please check documentation at [permissionizer/request-token](https://github.com/marketplace/actions/permissionizer-request-token) for more information.
+`),
+					Text: util.Ptr(fmt.Sprintf("Error: %s", err.Error())),
+				},
+			})
+			if err != nil {
+				a.logger.Errorw("Failed to create check run for repository policy", "org", org, "repository", repository, "error", err)
+				return
+			}
+			a.logger.Infow("Created failed policy validation check", "org", org, "repository", repository, "error", err)
+		} else {
+			_, _, err := client.Checks.CreateCheckRun(ctx, org, repository, github.CreateCheckRunOptions{
+				Name:        policyFile,
+				HeadSHA:     checkSuiteEvent.GetCheckSuite().GetHeadSHA(),
+				Status:      util.Ptr("completed"),
+				Conclusion:  util.Ptr("success"),
+				StartedAt:   &createdAt,
+				CompletedAt: &github.Timestamp{Time: time.Now()},
+				DetailsURL:  util.Ptr("https://github.com/marketplace/actions/permissionizer-request-token"),
+				Output: &github.CheckRunOutput{
+					Title: util.Ptr("Successfully validated Permissionizer policy file"),
+					Summary: util.Ptr(`
+Permissionizer policy file ` + fmt.Sprintf("`%s`", policyFile) + ` has been successfully validated.
+
+You can now issue tokens for this repository using ` + "`permissionizer/request-token@v1`" + ` GitHub Action. Please check documentation at [permissionizer/request-token](https://github.com/marketplace/actions/permissionizer-request-token) for more information.
+`),
+				},
+			})
+			if err != nil {
+				a.logger.Errorw("Failed to create check run for repository policy", "org", org, "repository", repository, "error", err)
+				return
+			}
+			a.logger.Infow("Created successful policy validation check", "org", org, "repository", repository, "error", err)
+		}
+	}
+}
+
+func (a *PermissionizerApi) isPermissionizerConfigFile(file string) bool {
+	return file == ".github/permissionizer.yaml" || file == ".github/permissionizer.yml"
 }
 
 func abortWithProblem(c *gin.Context, err error, pd *types.ProblemDetail) {

@@ -66,6 +66,7 @@ const (
 	RepositoryDoesNotAllowAccessFromWorkflowRef ErrorType = "repository_does_not_allow_access_from_workflow_ref"
 	RepositoryDoesNotAllowPermissions           ErrorType = "repository_does_not_allow_requested_permissions"
 	RepositoriesMustBelongToSameOrg             ErrorType = "repositories_must_belong_to_same_org"
+	InvalidWebhook                              ErrorType = "invalid_webhook"
 )
 
 type PermissionsDecision struct {
