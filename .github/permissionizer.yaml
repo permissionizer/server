@@ -1,4 +1,4 @@
-self: permissionizer/server12
+self: permissionizer/server
 allow:
   - repository: permissionizer/request-token
     permissions:
