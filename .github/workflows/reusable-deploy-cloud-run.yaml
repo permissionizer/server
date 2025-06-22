@@ -31,4 +31,4 @@ jobs:
         with:
           service: permissionizer-server
           region: europe-west4
-          image: europe-west4-docker.pkg.dev/permissionizer/ghcr/{{ inputs.image }}
+          image: europe-west4-docker.pkg.dev/permissionizer/ghcr/${{ inputs.image }}
