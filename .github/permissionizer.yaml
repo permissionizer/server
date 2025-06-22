@@ -4,3 +4,5 @@ allow:
     permissions:
       contents: read
       issues: write
+
+test
