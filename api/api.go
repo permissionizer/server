@@ -414,7 +414,7 @@ func (a *PermissionizerApi) validateRepositoryPolicy(checkSuiteEvent *github.Che
 			CompletedAt: &github.Timestamp{Time: time.Now()},
 			DetailsURL:  util.Ptr("https://github.com/marketplace/actions/permissionizer-request-token"),
 			Output: &github.CheckRunOutput{
-				Title: util.Ptr("Failed to validate Permissionizer policy file"),
+				Title: util.Ptr("Failing"),
 				Summary: util.Ptr(`
 Failed to validate Permissionizer policy file ` + fmt.Sprintf("`%s`", policyFile) + `.
 
@@ -438,7 +438,7 @@ Please check documentation at [permissionizer/request-token](https://github.com/
 			CompletedAt: &github.Timestamp{Time: time.Now()},
 			DetailsURL:  util.Ptr("https://github.com/marketplace/actions/permissionizer-request-token"),
 			Output: &github.CheckRunOutput{
-				Title: util.Ptr("Successfully validated Permissionizer policy file"),
+				Title: util.Ptr("Successful"),
 				Summary: util.Ptr(`
 Permissionizer policy file ` + fmt.Sprintf("`%s`", policyFile) + ` has been successfully validated.
 
