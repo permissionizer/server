@@ -67,6 +67,7 @@ const (
 	RepositoryDoesNotAllowPermissions           ErrorType = "repository_does_not_allow_requested_permissions"
 	RepositoriesMustBelongToSameOrg             ErrorType = "repositories_must_belong_to_same_org"
 	InvalidWebhook                              ErrorType = "invalid_webhook"
+	InvalidWebhookSecret                        ErrorType = "invalid_webhook_secret"
 )
 
 type PermissionsDecision struct {

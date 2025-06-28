@@ -3,13 +3,14 @@ package api
 import (
 	"context"
 	"crypto/rsa"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/golang-jwt/jwt/v5"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"gopkg.in/yaml.v3"
-	"io"
+	"mime"
 	"net/http"
 	"regexp"
 	"server/policy"
@@ -269,12 +270,45 @@ func ParsePolicy(content string, org string, repository string) (*types.Reposito
 }
 
 func (a *PermissionizerApi) HandleWebhook(c *gin.Context) {
-	event := c.GetHeader("X-GitHub-Event")
-	a.logger.Infow("Received webhook event", "event", event)
-	switch event {
+	eventType := github.WebHookType(c.Request)
+
+	signature := c.Request.Header.Get(github.SHA256SignatureHeader)
+
+	a.logger.Infow("Received webhook event", "type", eventType, "signed", signature != "")
+
+	contentType, _, err := mime.ParseMediaType(c.Request.Header.Get("Content-Type"))
+	if err != nil {
+		abortWithProblem(c, err, &types.ProblemDetail{
+			Type:   string(types.InvalidWebhook),
+			Detail: err.Error(),
+			Status: http.StatusBadRequest,
+		})
+		return
+	}
+
+	webhookSecret := a.config.WebhookSecret
+	if a.config.SkipTokenValidation {
+		a.logger.Warn("Skipping webhook secret validation due to configuration")
+		signature = ""
+		webhookSecret = ""
+	}
+
+	payload, err := github.ValidatePayloadFromBody(contentType, c.Request.Body, signature, []byte(webhookSecret))
+	if err != nil {
+		a.logger.Error("Failed to validate webhook payload", err)
+		abortWithProblem(c, err, &types.ProblemDetail{
+			Type:   string(types.InvalidWebhookSecret),
+			Detail: err.Error(),
+			Status: http.StatusUnauthorized,
+		})
+		return
+	}
+
+	switch eventType {
 	case "ping":
 		pingEvent := &github.PingEvent{}
-		err := c.ShouldBindJSON(pingEvent)
+
+		err = json.Unmarshal(payload, &pingEvent)
 		if err != nil && strings.Contains(err.Error(), "json: unknown field") {
 			// we might receive an event with an unknown field, which is fine
 			err = nil
@@ -292,7 +326,8 @@ func (a *PermissionizerApi) HandleWebhook(c *gin.Context) {
 		c.Status(http.StatusAccepted)
 	case "installation":
 		installationEvent := &github.InstallationEvent{}
-		err := c.ShouldBindJSON(installationEvent)
+
+		err = json.Unmarshal(payload, &installationEvent)
 		if err != nil && strings.Contains(err.Error(), "json: unknown field") {
 			// we might receive an event with an unknown field, which is fine
 			err = nil
@@ -309,7 +344,8 @@ func (a *PermissionizerApi) HandleWebhook(c *gin.Context) {
 		a.logger.Infow("Received installation event", "event", installationEvent)
 	case "check_suite":
 		checkSuiteEvent := &github.CheckSuiteEvent{}
-		err := c.ShouldBindJSON(checkSuiteEvent)
+
+		err = json.Unmarshal(payload, &checkSuiteEvent)
 		if err != nil && strings.Contains(err.Error(), "json: unknown field") {
 			// we might receive an event with an unknown field, which is fine
 			err = nil
@@ -326,15 +362,10 @@ func (a *PermissionizerApi) HandleWebhook(c *gin.Context) {
 		go a.validateRepositoryPolicy(checkSuiteEvent)
 		c.Status(http.StatusAccepted)
 	default:
-		bytes, err := io.ReadAll(c.Request.Body)
-		if err != nil {
-			a.logger.Error(err)
-			c.AbortWithStatus(http.StatusInternalServerError)
-		}
-		a.logger.Warnw("Received unsupported event", "event", event, "body", string(bytes))
+		a.logger.Warnw("Received unsupported event", "event", eventType, "body", string(payload))
 		abortWithProblem(c, nil, &types.ProblemDetail{
 			Type:   string(types.InvalidWebhook),
-			Detail: fmt.Sprintf("Unsupported event '%s'", event),
+			Detail: fmt.Sprintf("Unsupported event '%s'", eventType),
 			Status: http.StatusBadRequest,
 		})
 	}
@@ -539,6 +570,9 @@ func (tokenSource *jwtTokenSource) Token() (*oauth2.Token, error) {
 }
 
 func (a *PermissionizerApi) validateIDToken(ctx context.Context, IDToken string) (*oidc.IDToken, error) {
+	if a.config.SkipTokenValidation {
+		a.logger.Warn("Skipping token validation due to configuration")
+	}
 	idToken, err := a.tokenVerifier.Verify(ctx, IDToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify ID token: %w", err)
