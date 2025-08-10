@@ -2,11 +2,12 @@ package util
 
 import (
 	"fmt"
-	"github.com/google/go-github/v71/github"
 	"reflect"
 	"server/types"
 	"strings"
 	"time"
+
+	"github.com/google/go-github/v71/github"
 
 	"github.com/golang-jwt/jwt/v5"
 )

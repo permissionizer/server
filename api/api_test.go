@@ -1,9 +1,10 @@
 package api_test
 
 import (
-	"github.com/onsi/gomega"
 	"server/api"
 	"testing"
+
+	"github.com/onsi/gomega"
 )
 
 func TestParsesPolicyFile(t *testing.T) {

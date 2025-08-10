@@ -6,10 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/golang-jwt/jwt/v5"
-	"go.uber.org/zap"
-	"golang.org/x/oauth2"
-	"gopkg.in/yaml.v3"
 	"mime"
 	"net/http"
 	"regexp"
@@ -19,6 +15,11 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"go.uber.org/zap"
+	"golang.org/x/oauth2"
+	"gopkg.in/yaml.v3"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
