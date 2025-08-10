@@ -394,20 +394,21 @@ func (a *PermissionizerApi) validateRepositoryPolicy(checkSuiteEvent *github.Che
 	}
 	client := github.NewClient(nil).WithAuthToken(*permissionizerToken.Token)
 	var files []*github.CommitFile
-	if beforeSha != "0000000000000000000000000000000000000000" {
-		comparison, _, err := client.Repositories.CompareCommits(ctx, org, repository, beforeSha, headSha, nil)
-		if err != nil {
-			a.logger.Errorw("Failed to compare commits for repository policy validation", "org", org, "repository", repository, "before", beforeSha, "head", headSha, "error", err)
-			return
-		}
-		files = comparison.Files
-	} else {
+	if beforeSha == "0000000000000000000000000000000000000000" {
+		// didn't get before SHA, so we need to get the commit files from the head SHA
 		commit, _, err := client.Repositories.GetCommit(ctx, org, repository, headSha, nil)
 		if err != nil {
 			a.logger.Errorw("Failed to get commit for repository policy validation", "org", org, "repository", repository, "head", headSha, "error", err)
 			return
 		}
 		files = commit.Files
+	} else {
+		comparison, _, err := client.Repositories.CompareCommits(ctx, org, repository, beforeSha, headSha, nil)
+		if err != nil {
+			a.logger.Errorw("Failed to compare commits for repository policy validation", "org", org, "repository", repository, "before", beforeSha, "head", headSha, "error", err)
+			return
+		}
+		files = comparison.Files
 	}
 	permissionizerPolicyChanged := slices.ContainsFunc(files, func(file *github.CommitFile) bool {
 		return a.isPermissionizerPolicyFile(file.GetFilename())
