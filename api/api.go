@@ -188,7 +188,7 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 	if err != nil {
 		abortWithProblem(c, err, &types.ProblemDetail{
 			Type:   string(types.PermissionizerNotSufficientPermissions),
-			Detail: fmt.Sprintf("Permissionizer App (%s) does not have sufficient permissions in %s to issue token: %s", installation.AppID, installationTarget, err),
+			Detail: fmt.Sprintf("Permissionizer App (%d) does not have sufficient permissions in %s to issue token: %s", installation.AppID, installationTarget, err),
 			Status: http.StatusUnauthorized,
 		})
 		return
@@ -214,7 +214,7 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 	if err != nil {
 		abortWithProblem(c, err, &types.ProblemDetail{
 			Type:   string(types.PermissionizerNotSufficientPermissions),
-			Detail: fmt.Sprintf("Permissionizer App (%s) does not have sufficient permissions in %s to issue token: %s", installation.AppID, installationTarget, err),
+			Detail: fmt.Sprintf("Permissionizer App (%d) does not have sufficient permissions in %s to issue token: %s", installation.AppID, installationTarget, err),
 			Status: http.StatusUnauthorized,
 		})
 		return
