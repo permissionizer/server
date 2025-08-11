@@ -4,3 +4,8 @@ allow:
     permissions:
       contents: read
       issues: write
+    groups:
+      go-minor:
+        update-types:
+          - minor
+          - patch
