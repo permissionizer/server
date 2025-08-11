@@ -31,6 +31,7 @@ type PermissionizerApi struct {
 	tokenVerifier *oidc.IDTokenVerifier
 	config        *types.PermissionizerConfig
 	logger        *zap.SugaredLogger
+	rateLimiter   *util.RepoRateLimiter
 }
 
 func NewApi(config *types.PermissionizerConfig, logger *zap.SugaredLogger) *PermissionizerApi {
@@ -41,9 +42,9 @@ func NewApi(config *types.PermissionizerConfig, logger *zap.SugaredLogger) *Perm
 
 	tokenVerifier := provider.Verifier(&oidc.Config{
 		ClientID:                   config.ExpectedAudience,
-		SkipExpiryCheck:            config.SkipTokenValidation,
-		SkipIssuerCheck:            config.SkipTokenValidation,
-		InsecureSkipSignatureCheck: config.SkipTokenValidation,
+		SkipExpiryCheck:            config.Unsecure.SkipTokenValidation,
+		SkipIssuerCheck:            config.Unsecure.SkipTokenValidation,
+		InsecureSkipSignatureCheck: config.Unsecure.SkipTokenValidation,
 	})
 
 	authenticatedClient := oauth2.NewClient(context.Background(), &jwtTokenSource{
@@ -57,6 +58,7 @@ func NewApi(config *types.PermissionizerConfig, logger *zap.SugaredLogger) *Perm
 		tokenVerifier: tokenVerifier,
 		config:        config,
 		logger:        logger,
+		rateLimiter:   util.NewRepoRateLimiter(config.RateLimit),
 	}
 }
 
@@ -90,6 +92,19 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 	}
 	if IDToken.Claims(requestor) != nil || requestor.Repository == "" || requestor.Ref == "" || requestor.WorkflowRef == "" {
 		abortWithInvalidToken(c, errors.New("invalid ID token claims"))
+		return
+	}
+
+	requestingRepositoryLimiter := a.rateLimiter.GetLimiter(util.ParseRepository(requestor.Repository))
+	if !requestingRepositoryLimiter.Allow() {
+		retryAfter := requestingRepositoryLimiter.Reserve().Delay() / time.Second
+		c.Header("Retry-After", fmt.Sprintf("%d", int(retryAfter)))
+		abortWithProblem(c, nil, &types.ProblemDetail{
+			Type:   string(types.InvalidRequest),
+			Title:  "Rate limit exceeded",
+			Status: http.StatusTooManyRequests,
+			Detail: fmt.Sprintf("Rate limit for repository '%s' exceeded", requestor.Repository),
+		})
 		return
 	}
 
@@ -138,8 +153,10 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 	}
 
 	var installation *github.Installation
+	var installationTarget string
 	if len(targetRepositories) == 1 {
 		targetRepository := targetRepositories[0]
+		installationTarget = targetRepository
 		installation, _, err = a.client.Apps.FindRepositoryInstallation(c.Request.Context(), targetOrg, targetRepository)
 		if err != nil || installation.GetPermissions().GetContents() == "none" {
 			abortWithProblem(c, err, &types.ProblemDetail{
@@ -150,6 +167,7 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 			return
 		}
 	} else {
+		installationTarget = targetOrg
 		installation, _, err = a.client.Apps.FindOrganizationInstallation(c.Request.Context(), targetOrg)
 		if err != nil || installation.GetPermissions().GetContents() == "none" {
 			abortWithProblem(c, err, &types.ProblemDetail{
@@ -170,7 +188,7 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 	if err != nil {
 		abortWithProblem(c, err, &types.ProblemDetail{
 			Type:   string(types.PermissionizerNotSufficientPermissions),
-			Detail: fmt.Sprintf("Permissionizer App does not have sufficient permissions to issue a token: %s", err),
+			Detail: fmt.Sprintf("Permissionizer App (%s) does not have sufficient permissions in %s to issue token: %s", installation.AppID, installationTarget, err),
 			Status: http.StatusUnauthorized,
 		})
 		return
@@ -196,10 +214,25 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 	if err != nil {
 		abortWithProblem(c, err, &types.ProblemDetail{
 			Type:   string(types.PermissionizerNotSufficientPermissions),
-			Detail: fmt.Sprintf("Permissionizer App does not have sufficient permissions to issue token: %s", err),
+			Detail: fmt.Sprintf("Permissionizer App (%s) does not have sufficient permissions in %s to issue token: %s", installation.AppID, installationTarget, err),
 			Status: http.StatusUnauthorized,
 		})
 		return
+	}
+
+	for _, targetRepository := range targetRepositories {
+		targetRepositoryLimiter := a.rateLimiter.GetLimiter(util.ParseRepository(targetRepository))
+		if !targetRepositoryLimiter.Allow() {
+			retryAfter := targetRepositoryLimiter.Reserve().Delay() / time.Second
+			c.Header("Retry-After", fmt.Sprintf("%d", int(retryAfter)))
+			abortWithProblem(c, nil, &types.ProblemDetail{
+				Type:   string(types.InvalidRequest),
+				Title:  "Rate limit exceeded",
+				Status: http.StatusTooManyRequests,
+				Detail: fmt.Sprintf("Rate limit for repository '%s' exceeded", targetRepository),
+			})
+			return
+		}
 	}
 
 	a.logger.Infow("Issuing a scoped token", "requestor", requestor, "request", request)
@@ -288,7 +321,7 @@ func (a *PermissionizerApi) HandleWebhook(c *gin.Context) {
 	}
 
 	webhookSecret := a.config.WebhookSecret
-	if a.config.SkipTokenValidation {
+	if a.config.Unsecure.SkipTokenValidation {
 		a.logger.Warn("Skipping webhook secret validation due to configuration")
 		signature = ""
 		webhookSecret = ""
@@ -572,7 +605,7 @@ func (tokenSource *jwtTokenSource) Token() (*oauth2.Token, error) {
 }
 
 func (a *PermissionizerApi) validateIDToken(ctx context.Context, IDToken string) (*oidc.IDToken, error) {
-	if a.config.SkipTokenValidation {
+	if a.config.Unsecure.SkipTokenValidation {
 		a.logger.Warn("Skipping token validation due to configuration")
 	}
 	idToken, err := a.tokenVerifier.Verify(ctx, IDToken)

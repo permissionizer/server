@@ -2,7 +2,6 @@
 # Configure the server by modifying the values below.
 
 # permissionizer:
-#   unsecure-skip-token-validation: false
 #   expected-audience: permissionizer-server (https://permissionizer.app)
 #   client-id: github-app-client-id
 #   private-key: |
@@ -10,3 +9,10 @@
 #     ENTER YOUR GITHUB PRIVATE KEY HERE
 #     -----END RSA PRIVATE KEY-----
 #   webhook-secret: github-webhook-secret
+#   rate-limit:
+#     tokens-per-minute: 10
+#     overrides:
+#       permissionizer: 60
+#       permissionizer/request-token: 100
+#   unsecure:
+#     skip-token-validation: false
