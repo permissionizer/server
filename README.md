@@ -4,7 +4,7 @@ This is a server for [Permissionizer](https://github.com/marketplace/actions/per
 
 For detailed guidance on how to use the Permissionizer App, please refer to the [permissionizer/request-token](https://github.com/marketplace/actions/permissionizer-request-token) action documentation.
 
-### Custom Deployment
+### Self-hosting the Permissionizer Server
 
 While the process of issuing tokens is secure and requires explicit policies for
 the token exchange, to maintain full control over token exchange and deployment,
