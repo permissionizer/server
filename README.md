@@ -8,11 +8,10 @@ For detailed guidance on how to use the Permissionizer App, please refer to the 
 
 While the process of issuing tokens is secure and requires explicit policies for
 the token exchange, to maintain full control over token exchange and deployment,
-organizations can create a custom Permissionizer App (public or internal) and
-deploy an instance of the Permissionizer Server. This ensures that no tokens
-ever leave the organization's internal network.
+organizations can create a custom Permissionizer App and deploy an instance of the
+Permissionizer Server. This ensures that no tokens ever leave the organization's internal network.
 
-To deploy a custom instance of the Permissionizer Server, follow these steps:
+To completely self-host a Permissionizer Server, follow these steps:
 
 1. **Create a GitHub App**
 
