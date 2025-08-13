@@ -44,7 +44,7 @@ To deploy a custom instance of the Permissionizer Server, follow these steps:
      uses: permissionizer/request-token@v1
      with:
        permissionizer-server: https://permissionizer.mycompany.com
-       target-repository: permissionizer/server
+       target-repository: mycompany/myrepo
        permissions: |
          contents: read
          issues: write
