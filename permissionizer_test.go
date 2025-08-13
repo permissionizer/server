@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path"
+	"path/filepath"
 	"server/types"
 	"strings"
 	"testing"
@@ -37,27 +38,17 @@ func TestInitConfigFailsWithoutClientIdOrPrivateKey(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 
 	gomega.PanicWith(func() {
-		initConfig(logger.Sugar())
+		initConfig(logger.Sugar(), []string{})
 	})
 	t.Setenv("PERMISSIONIZER_CLIENT_ID", "test-client-id")
 
 	gomega.PanicWith(func() {
-		initConfig(logger.Sugar())
+		initConfig(logger.Sugar(), []string{})
 	})
 
 	t.Setenv("PERMISSIONIZER_PRIVATE_KEY", strings.ReplaceAll(samplePrivateKey, "\n", "\\n"))
 
-	config := initConfig(logger.Sugar())
-
-	gomega.Expect(config.ClientId).To(gomega.Equal("test-client-id"))
-	gomega.Expect(config.WebhookSecret).To(gomega.Equal(""))
-	gomega.Expect(config.ExpectedAudience).To(gomega.Equal("permissionizer-server (https://permissionizer.app)"))
-	gomega.Expect(config.PrivateKey).NotTo(gomega.BeNil())
-	gomega.Expect(config.RateLimit).To(gomega.Equal(types.RateLimitConfig{
-		TokensPerMinute: 10.0,
-		Overrides:       map[string]float64{},
-	}))
-	gomega.Expect(config.Unsecure.SkipTokenValidation).To(gomega.BeFalse())
+	initConfig(logger.Sugar(), []string{})
 }
 
 func TestInitConfigLoadsWithDefaults(t *testing.T) {
@@ -68,8 +59,9 @@ func TestInitConfigLoadsWithDefaults(t *testing.T) {
 	t.Setenv("PERMISSIONIZER_PRIVATE_KEY", strings.ReplaceAll(samplePrivateKey, "\n", "\\n"))
 
 	logger, _ := zap.NewDevelopment()
-	config := initConfig(logger.Sugar())
+	config := initConfig(logger.Sugar(), []string{})
 
+	gomega.Expect(config.AppLink).To(gomega.Equal("https://github.com/apps/permissionizer"))
 	gomega.Expect(config.ClientId).To(gomega.Equal("test-client-id"))
 	gomega.Expect(config.WebhookSecret).To(gomega.Equal(""))
 	gomega.Expect(config.ExpectedAudience).To(gomega.Equal("permissionizer-server (https://permissionizer.app)"))
@@ -87,6 +79,7 @@ func TestLoadConfigFromFile(t *testing.T) {
 
 	configText := `
 permissionizer:
+  app-link: https://github.com/apps/permissionizer-test
   expected-audience: permissionizer-server (https://permissionizer-test.app)
   client-id: test-client-id
   private-key: |` + strings.ReplaceAll(samplePrivateKey, "\n", "\n"+strings.Repeat(" ", 4)) + `
@@ -103,9 +96,9 @@ permissionizer:
 
 	logger, _ := zap.NewDevelopment()
 
-	config := initConfig(logger.Sugar())
-	gomega.Expect(config).ToNot(gomega.BeNil())
+	config := initConfig(logger.Sugar(), []string{filepath.Dir(tmpFile.Name())})
 
+	gomega.Expect(config.AppLink).To(gomega.Equal("https://github.com/apps/permissionizer-test"))
 	gomega.Expect(config.ClientId).To(gomega.Equal("test-client-id"))
 	gomega.Expect(config.WebhookSecret).To(gomega.Equal("test-secret"))
 	gomega.Expect(config.ExpectedAudience).To(gomega.Equal("permissionizer-server (https://permissionizer-test.app)"))
@@ -124,6 +117,7 @@ func TestLoadConfigFromEnvs(t *testing.T) {
 	gomega.RegisterTestingT(t)
 	reset()
 
+	t.Setenv("PERMISSIONIZER_APP_LINK", "https://github.com/apps/permissionizer-test")
 	t.Setenv("PERMISSIONIZER_CLIENT_ID", "test-client-id")
 	t.Setenv("PERMISSIONIZER_PRIVATE_KEY", samplePrivateKey)
 	t.Setenv("PERMISSIONIZER_EXPECTED_AUDIENCE", "permissionizer-server (https://permissionizer-test.app)")
@@ -134,9 +128,9 @@ func TestLoadConfigFromEnvs(t *testing.T) {
 
 	logger, _ := zap.NewDevelopment()
 
-	config := initConfig(logger.Sugar())
-	gomega.Expect(config).ToNot(gomega.BeNil())
+	config := initConfig(logger.Sugar(), []string{})
 
+	gomega.Expect(config.AppLink).To(gomega.Equal("https://github.com/apps/permissionizer-test"))
 	gomega.Expect(config.ClientId).To(gomega.Equal("test-client-id"))
 	gomega.Expect(config.WebhookSecret).To(gomega.Equal("test-secret"))
 	gomega.Expect(config.ExpectedAudience).To(gomega.Equal("permissionizer-server (https://permissionizer-test.app)"))
@@ -164,9 +158,9 @@ permissionizer:
 
 	logger, _ := zap.NewDevelopment()
 
-	config := initConfig(logger.Sugar())
-	gomega.Expect(config).ToNot(gomega.BeNil())
+	config := initConfig(logger.Sugar(), []string{filepath.Dir(tmpFile.Name())})
 
+	gomega.Expect(config.AppLink).To(gomega.Equal("https://github.com/apps/permissionizer"))
 	gomega.Expect(config.ClientId).To(gomega.Equal("test-client-id"))
 	gomega.Expect(config.WebhookSecret).To(gomega.Equal(""))
 	gomega.Expect(config.ExpectedAudience).To(gomega.Equal("permissionizer-server (https://permissionizer.app)"))
@@ -176,6 +170,26 @@ permissionizer:
 		Overrides:       map[string]float64{},
 	}))
 	gomega.Expect(config.Unsecure.SkipTokenValidation).To(gomega.BeFalse())
+}
+
+func TestLoadConfigEnvPreference(t *testing.T) {
+	gomega.RegisterTestingT(t)
+	reset()
+
+	t.Setenv("PERMISSIONIZER_CLIENT_ID", "env-test-client-id")
+
+	configText := `
+permissionizer:
+  client-id: test-client-id
+  private-key: |` + strings.ReplaceAll(samplePrivateKey, "\n", "\n"+strings.Repeat(" ", 4))
+	tmpFile := useTestConfig(configText)
+	defer os.Remove(tmpFile.Name())
+
+	logger, _ := zap.NewDevelopment()
+
+	config := initConfig(logger.Sugar(), []string{filepath.Dir(tmpFile.Name())})
+
+	gomega.Expect(config.ClientId).To(gomega.Equal("env-test-client-id"))
 }
 
 func useTestConfig(configText string) *os.File {

@@ -25,9 +25,10 @@ import (
 )
 
 var (
-	version          = "dev"
-	revision         = ""
-	production       = flag.Bool("production", false, "Enable production mode")
+	version    = "dev"
+	revision   = ""
+	production = flag.Bool("production", false, "Enable production mode")
+	// CLI arguments for issuing a fake token for testing purposes
 	fakeToken        = flag.Bool("fake-token", false, "[Testing only] Generate token for testing purposes")
 	tokenRepository  = flag.String("repository", "", "[Testing only] Issuing repository of the generated token")
 	tokenRef         = flag.String("ref", "refs/head/main", "[Testing only] Ref of the generated token")
@@ -39,11 +40,14 @@ func main() {
 	exitIfCmd()
 
 	var internalLogger *zap.Logger
+	var configPaths []string
 	var err error
 	if production != nil && *production {
+		configPaths = []string{"config"}
 		internalLogger, err = zap.NewProduction()
 		gin.SetMode("release")
 	} else {
+		configPaths = []string{"config/dev", "config"}
 		internalLogger, err = zap.NewDevelopment()
 		gin.SetMode("debug")
 	}
@@ -52,7 +56,7 @@ func main() {
 	}
 	logger := internalLogger.Sugar()
 
-	config := initConfig(logger)
+	config := initConfig(logger, configPaths)
 
 	// Create API instance with the client
 	permissionizerApi := api.NewApi(config, logger)
@@ -81,6 +85,7 @@ func main() {
 
 	router.POST("/v1/token", permissionizerApi.IssueToken)
 	router.POST("/v1/webhook", permissionizerApi.HandleWebhook)
+	router.NoRoute(permissionizerApi.Homepage)
 
 	go func() {
 		err := router.Run("0.0.0.0:8080")
@@ -109,14 +114,15 @@ func exitIfCmd() {
 	}
 }
 
-func initConfig(sugar *zap.SugaredLogger) *types.PermissionizerConfig {
+func initConfig(sugar *zap.SugaredLogger, configPaths []string) *types.PermissionizerConfig {
 	viper.SetOptions(viper.ExperimentalBindStruct()) // allow binding envs to structs
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
 
 	viper.SetConfigName("permissionizer-server")
-	viper.AddConfigPath("config/dev")
-	viper.AddConfigPath("config")
+	for _, configPath := range configPaths {
+		viper.AddConfigPath(configPath)
+	}
 
 	err := viper.ReadInConfig()
 	if err != nil {
@@ -124,6 +130,7 @@ func initConfig(sugar *zap.SugaredLogger) *types.PermissionizerConfig {
 	}
 
 	config := types.PermissionizerConfig{
+		AppLink:          "https://github.com/apps/permissionizer",
 		ExpectedAudience: "permissionizer-server (https://permissionizer.app)",
 		RateLimit: types.RateLimitConfig{
 			TokensPerMinute: 10.0,
