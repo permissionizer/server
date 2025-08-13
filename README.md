@@ -73,5 +73,5 @@ To deploy a custom instance of the Permissionizer Server, follow these steps:
 
 > [!NOTE]
 > `--fake-token` flag allows generating an unsigned JWT token that imitates the token issued by GitHub OIDC.
-> In order to use it, you must disable all token checks when starting the server `permissionizer.unsecure-skip-token-validation: true` (Not suited for production use)
+> In order to use it, you must disable all token checks when starting the server `permissionizer.unsecure.skip-token-validation: true` (Not suited for production use)
 
