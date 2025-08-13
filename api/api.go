@@ -66,6 +66,10 @@ var (
 	repositoryPattern = regexp.MustCompile(`^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$`)
 )
 
+func (a *PermissionizerApi) Homepage(c *gin.Context) {
+	c.Redirect(http.StatusMovedPermanently, a.config.AppLink)
+}
+
 func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 	request := &types.IssueTokenRequest{}
 	if err := c.ShouldBindJSON(request); err != nil {

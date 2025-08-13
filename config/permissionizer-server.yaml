@@ -2,6 +2,7 @@
 # Configure the server by modifying the values below.
 
 # permissionizer:
+#   app-link: https://github.com/apps/permissionizer
 #   expected-audience: permissionizer-server (https://permissionizer.app)
 #   client-id: github-app-client-id
 #   private-key: |

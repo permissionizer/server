@@ -8,6 +8,7 @@ import (
 )
 
 type PermissionizerConfig struct {
+	AppLink          string          `mapstructure:"app-link"`
 	ExpectedAudience string          `mapstructure:"expected-audience"`
 	ClientId         string          `mapstructure:"client-id"`
 	PrivateKey       *rsa.PrivateKey `mapstructure:"private-key"`
