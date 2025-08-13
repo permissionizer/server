@@ -1,6 +1,8 @@
 package util
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"fmt"
 	"reflect"
 	"server/types"
@@ -17,7 +19,11 @@ type UnsignedIDTokenClaims struct {
 	types.TokenRequestor
 }
 
-func GenerateUnsignedIDToken(audience string, repository string, ref string, workflowRef string) string {
+func GenerateSelfSignedIDToken(audience string, repository string, ref string, workflowRef string) string {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		panic(err)
+	}
 	// To protect against clock drift, set the issuance time 60 seconds in the past.
 	now := time.Now().Add(-60 * time.Second)
 	expiresAt := now.Add(10 * time.Minute)
@@ -37,7 +43,7 @@ func GenerateUnsignedIDToken(audience string, repository string, ref string, wor
 		},
 	})
 
-	tokenString, err := token.SigningString()
+	tokenString, err := token.SignedString(privateKey)
 	if err != nil {
 		panic(err)
 	}

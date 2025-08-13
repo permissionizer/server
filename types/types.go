@@ -8,11 +8,21 @@ import (
 )
 
 type PermissionizerConfig struct {
-	SkipTokenValidation bool
-	ExpectedAudience    string
-	ClientId            string
-	PrivateKey          *rsa.PrivateKey
-	WebhookSecret       string
+	ExpectedAudience string          `mapstructure:"expected-audience"`
+	ClientId         string          `mapstructure:"client-id"`
+	PrivateKey       *rsa.PrivateKey `mapstructure:"private-key"`
+	WebhookSecret    string          `mapstructure:"webhook-secret"`
+	RateLimit        RateLimitConfig `mapstructure:"rate-limit"`
+	Unsecure         UnsecureConfig  `mapstructure:"unsecure"`
+}
+
+type RateLimitConfig struct {
+	TokensPerMinute float64            `mapstructure:"tokens-per-minute"`
+	Overrides       map[string]float64 `mapstructure:"overrides"`
+}
+
+type UnsecureConfig struct {
+	SkipTokenValidation bool `mapstructure:"skip-token-validation"`
 }
 
 type IssueTokenRequest struct {
