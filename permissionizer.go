@@ -104,7 +104,7 @@ func exitIfCmd() {
 		if *tokenWorkflowRef == "" {
 			tokenWorkflowRef = util.Ptr(*tokenRepository + "/.github/workflows/fake-token.yaml@" + *tokenRef)
 		}
-		fmt.Println(util.GenerateUnsignedIDToken("permissionizer-server (https://permissionizer.app)", *tokenRepository, *tokenRef, *tokenWorkflowRef))
+		fmt.Println(util.GenerateSelfSignedIDToken("permissionizer-server (https://permissionizer.app)", *tokenRepository, *tokenRef, *tokenWorkflowRef))
 		os.Exit(0)
 	}
 }

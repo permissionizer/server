@@ -3,6 +3,7 @@ package util
 import (
 	"server/types"
 	"sync"
+	"time"
 
 	"golang.org/x/time/rate"
 )
@@ -22,7 +23,8 @@ func NewRepoRateLimiter(config types.RateLimitConfig) *RepoRateLimiter {
 
 func (r *RepoRateLimiter) GetLimiter(org string, repo string) *rate.Limiter {
 	r.mu.RLock()
-	limiter, exists := r.limiters[repo]
+	fullRepo := org + "/" + repo
+	limiter, exists := r.limiters[fullRepo]
 	r.mu.RUnlock()
 	if exists {
 		return limiter
@@ -30,13 +32,14 @@ func (r *RepoRateLimiter) GetLimiter(org string, repo string) *rate.Limiter {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	limit := r.config.TokensPerMinute
-	if override, ok := r.config.Overrides[repo]; ok {
+	if override, ok := r.config.Overrides[fullRepo]; ok {
 		limit = override
 	} else if override, ok := r.config.Overrides[org]; ok {
 		limit = override
 	}
 	tokensPerSecond := limit / 60.
 	limiter = rate.NewLimiter(rate.Limit(tokensPerSecond), int(limit))
-	r.limiters[repo] = limiter
+	limiter.AllowN(time.Now().Add(-time.Minute), int(limit))
+	r.limiters[fullRepo] = limiter
 	return limiter
 }

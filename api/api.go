@@ -95,15 +95,16 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 		return
 	}
 
-	requestingRepositoryLimiter := a.rateLimiter.GetLimiter(util.ParseRepository(requestor.Repository))
-	if !requestingRepositoryLimiter.Allow() {
-		retryAfter := requestingRepositoryLimiter.Reserve().Delay() / time.Second
+	requestorOrg, requestorRepository := util.ParseRepository(requestor.Repository)
+	requestorRepositoryLimiter := a.rateLimiter.GetLimiter(requestorOrg, requestorRepository)
+	if !requestorRepositoryLimiter.Allow() {
+		retryAfter := requestorRepositoryLimiter.Reserve().Delay() / time.Second
 		c.Header("Retry-After", fmt.Sprintf("%d", int(retryAfter)))
 		abortWithProblem(c, nil, &types.ProblemDetail{
 			Type:   string(types.InvalidRequest),
 			Title:  "Rate limit exceeded",
 			Status: http.StatusTooManyRequests,
-			Detail: fmt.Sprintf("Rate limit for repository '%s' exceeded", requestor.Repository),
+			Detail: fmt.Sprintf("Rate limit for repository '%s/%s' exceeded the allowed %g tokens/min", requestorOrg, requestorRepository, requestorRepositoryLimiter.Limit()*60.),
 		})
 		return
 	}
@@ -221,7 +222,12 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 	}
 
 	for _, targetRepository := range targetRepositories {
-		targetRepositoryLimiter := a.rateLimiter.GetLimiter(util.ParseRepository(targetRepository))
+		if requestorOrg == targetOrg && requestorRepository == targetRepository {
+			// the token is being requested for the same repository as the one it is issued from
+			// rate limit was already checked above
+			continue
+		}
+		targetRepositoryLimiter := a.rateLimiter.GetLimiter(targetOrg, targetRepository)
 		if !targetRepositoryLimiter.Allow() {
 			retryAfter := targetRepositoryLimiter.Reserve().Delay() / time.Second
 			c.Header("Retry-After", fmt.Sprintf("%d", int(retryAfter)))
@@ -229,7 +235,7 @@ func (a *PermissionizerApi) IssueToken(c *gin.Context) {
 				Type:   string(types.InvalidRequest),
 				Title:  "Rate limit exceeded",
 				Status: http.StatusTooManyRequests,
-				Detail: fmt.Sprintf("Rate limit for repository '%s' exceeded", targetRepository),
+				Detail: fmt.Sprintf("Rate limit for repository '%s/%s' exceeded the allowed %g tokens/min", targetOrg, targetRepository, targetRepositoryLimiter.Limit()*60.),
 			})
 			return
 		}
