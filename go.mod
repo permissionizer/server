@@ -5,8 +5,8 @@ go 1.24.6
 require (
 	github.com/gin-gonic/gin v1.10.1
 	github.com/google/go-github/v71 v71.0.0
-	github.com/onsi/gomega v1.38.1
-	golang.org/x/time v0.12.0
+	github.com/onsi/gomega v1.38.2
+	golang.org/x/time v0.13.0
 )
 
 require (
@@ -27,7 +27,7 @@ require (
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.26.0 // indirect
-	github.com/go-viper/mapstructure/v2 v2.3.0
+	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/go-querystring v1.1.0 // indirect
@@ -52,7 +52,7 @@ require (
 	golang.org/x/arch v0.15.0 // indirect
 	golang.org/x/crypto v0.41.0 // indirect
 	golang.org/x/net v0.43.0 // indirect
-	golang.org/x/oauth2 v0.30.0
+	golang.org/x/oauth2 v0.31.0
 	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
 	google.golang.org/protobuf v1.36.7 // indirect
