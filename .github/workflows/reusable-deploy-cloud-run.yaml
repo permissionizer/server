@@ -29,7 +29,7 @@ jobs:
           workload_identity_provider: ${{ secrets.GCLOUD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCLOUD_SERVICE_ACCOUNT }}
 
-      - uses: google-github-actions/deploy-cloudrun@v2
+      - uses: google-github-actions/deploy-cloudrun@v3
         with:
           service: permissionizer-server
           region: europe-west4
