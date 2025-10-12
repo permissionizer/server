@@ -68,8 +68,9 @@ sequenceDiagram
   Server->>Target: Fetch repository policy<br/> (.github/permissionizer.yaml)
   Server->>Server: Evaluate  policy
 
+  Server->>GitHub: Issue token with scoped permissions
   Server-->>Requestor: 200 { token, expires_at }
-  Requestor->>Target: use token (checkout / push)
+  Requestor->>Target: Use provided token (checkout / push / etc.)
   
   Server->>GitHub: Revoke token (optional)
 ```
