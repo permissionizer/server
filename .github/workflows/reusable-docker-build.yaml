@@ -45,7 +45,7 @@ jobs:
         with:
           images: ghcr.io/permissionizer/server
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         id: push
         with:
           context: .
