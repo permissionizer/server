@@ -4,7 +4,7 @@ import (
 	"crypto/rsa"
 	"time"
 
-	"github.com/google/go-github/v71/github"
+	"github.com/google/go-github/v80/github"
 )
 
 type PermissionizerConfig struct {

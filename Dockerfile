@@ -1,4 +1,4 @@
-FROM --platform=${BUILDPLATFORM} golang:1.24-alpine AS builder
+FROM --platform=${BUILDPLATFORM} golang:1.26-alpine3.24 AS builder
 
 WORKDIR /workspace
 
@@ -14,7 +14,7 @@ ARG REVISION
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
   go build -ldflags "-s -w -X main.version=${VERSION} -X main.revision=${REVISION}" -trimpath -buildvcs=false -o bin/permissionizer .
 
-FROM alpine:3.21.3
+FROM alpine:3.24
 WORKDIR /app
 
 COPY --from=builder /workspace/bin/permissionizer ./permissionizer
