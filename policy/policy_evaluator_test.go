@@ -1,12 +1,13 @@
 package policy_test
 
 import (
-	"github.com/google/go-github/v71/github"
-	"github.com/onsi/gomega"
 	"server/policy"
 	"server/types"
 	"server/util"
 	"testing"
+
+	"github.com/google/go-github/v71/github"
+	"github.com/onsi/gomega"
 )
 
 var (

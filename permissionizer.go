@@ -1,28 +1,34 @@
 package main
 
 import (
+	"crypto/rsa"
 	"flag"
 	"fmt"
-	ginzap "github.com/gin-contrib/zap"
-	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/spf13/viper"
-	"go.uber.org/zap"
 	"net/http"
 	"os"
 	"os/signal"
+	"reflect"
 	"server/api"
 	"server/types"
 	"server/util"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
+
+	ginzap "github.com/gin-contrib/zap"
+	"github.com/gin-gonic/gin"
+	"github.com/go-viper/mapstructure/v2"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 var (
-	version          = "dev"
-	revision         = ""
-	production       = flag.Bool("production", false, "Enable production mode")
+	version    = "dev"
+	revision   = ""
+	production = flag.Bool("production", false, "Enable production mode")
+	// CLI arguments for issuing a fake token for testing purposes
 	fakeToken        = flag.Bool("fake-token", false, "[Testing only] Generate token for testing purposes")
 	tokenRepository  = flag.String("repository", "", "[Testing only] Issuing repository of the generated token")
 	tokenRef         = flag.String("ref", "refs/head/main", "[Testing only] Ref of the generated token")
@@ -34,11 +40,14 @@ func main() {
 	exitIfCmd()
 
 	var internalLogger *zap.Logger
+	var configPaths []string
 	var err error
 	if production != nil && *production {
+		configPaths = []string{"config"}
 		internalLogger, err = zap.NewProduction()
 		gin.SetMode("release")
 	} else {
+		configPaths = []string{"config/dev", "config"}
 		internalLogger, err = zap.NewDevelopment()
 		gin.SetMode("debug")
 	}
@@ -47,7 +56,7 @@ func main() {
 	}
 	logger := internalLogger.Sugar()
 
-	config := initConfig(logger)
+	config := initConfig(logger, configPaths)
 
 	// Create API instance with the client
 	permissionizerApi := api.NewApi(config, logger)
@@ -76,6 +85,7 @@ func main() {
 
 	router.POST("/v1/token", permissionizerApi.IssueToken)
 	router.POST("/v1/webhook", permissionizerApi.HandleWebhook)
+	router.NoRoute(permissionizerApi.Homepage)
 
 	go func() {
 		err := router.Run("0.0.0.0:8080")
@@ -99,52 +109,103 @@ func exitIfCmd() {
 		if *tokenWorkflowRef == "" {
 			tokenWorkflowRef = util.Ptr(*tokenRepository + "/.github/workflows/fake-token.yaml@" + *tokenRef)
 		}
-		fmt.Println(util.GenerateUnsignedIDToken("permissionizer-server (https://permissionizer.app)", *tokenRepository, *tokenRef, *tokenWorkflowRef))
+		fmt.Println(util.GenerateSelfSignedIDToken("permissionizer-server (https://permissionizer.app)", *tokenRepository, *tokenRef, *tokenWorkflowRef))
 		os.Exit(0)
 	}
 }
 
-func initConfig(sugar *zap.SugaredLogger) *types.PermissionizerConfig {
+func initConfig(sugar *zap.SugaredLogger, configPaths []string) *types.PermissionizerConfig {
+	viper.SetOptions(viper.ExperimentalBindStruct()) // allow binding envs to structs
 	viper.AutomaticEnv()
-	viper.AllowEmptyEnv(true)
-	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
 
 	viper.SetConfigName("permissionizer-server")
-	viper.AddConfigPath("config/dev")
-	viper.AddConfigPath("config")
+	for _, configPath := range configPaths {
+		viper.AddConfigPath(configPath)
+	}
 
-	viper.SetDefault("permissionizer.expected-audience", "permissionizer-server (https://permissionizer.app)")
-	viper.SetDefault("permissionizer.unsecure-skip-token-checks", false)
 	err := viper.ReadInConfig()
 	if err != nil {
 		sugar.Infow("Not found config in default location", "path", "config/permissionizer-server.yaml")
 	}
 
-	skipTokenValidation := viper.GetBool("permissionizer.unsecure-skip-token-validation")
-	expectedAudience := viper.GetString("permissionizer.expected-audience")
-	clientId := viper.GetString("permissionizer.client-id")
-	privateKeyStr := viper.GetString("permissionizer.private-key")
-	webhookSecret := viper.GetString("permissionizer.webhook-secret")
-	if clientId == "" {
+	config := types.PermissionizerConfig{
+		AppLink:          "https://github.com/apps/permissionizer",
+		ExpectedAudience: "permissionizer-server (https://permissionizer.app)",
+		RateLimit: types.RateLimitConfig{
+			TokensPerMinute: 10.0,
+			Overrides:       map[string]float64{},
+		},
+		Unsecure: types.UnsecureConfig{
+			SkipTokenValidation: false,
+		},
+	}
+
+	// prefix the config with "permissionizer"
+	type Holder struct {
+		Permissionizer *types.PermissionizerConfig `mapstructure:"permissionizer"`
+	}
+	holder := &Holder{Permissionizer: &config}
+
+	decoderConfig := func(dc *mapstructure.DecoderConfig) {
+		dc.DecodeHook = mapstructure.ComposeDecodeHookFunc(pemToPrivateKeyHook(), stringToMapHook())
+	}
+	if err := viper.Unmarshal(&holder, decoderConfig); err != nil {
+		sugar.Fatal("Failed to unmarshal config", err)
+	}
+
+	if config.ClientId == "" {
 		sugar.Fatal("Missing 'permissionizer.client-id' configuration")
 	}
-	if privateKeyStr == "" {
+	if config.PrivateKey == nil {
 		sugar.Fatal("Missing 'permissionizer.private-key' configuration")
 	}
-	if skipTokenValidation {
+
+	if config.Unsecure.SkipTokenValidation {
 		sugar.Error("IDToken validation is disabled, this is only intended for local development and will not verify integrity of the tokens. If used in production, this will allow anyone to access any repository.")
 	}
 
-	privateKey, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(privateKeyStr))
-	if err != nil {
-		sugar.Fatal("Failed to parse private key found in 'permissionizer.private-key' config", err)
-	}
+	return &config
+}
 
-	return &types.PermissionizerConfig{
-		SkipTokenValidation: skipTokenValidation,
-		ExpectedAudience:    expectedAudience,
-		ClientId:            clientId,
-		PrivateKey:          privateKey,
-		WebhookSecret:       webhookSecret,
+func pemToPrivateKeyHook() mapstructure.DecodeHookFunc {
+	return func(
+		f reflect.Type,
+		t reflect.Type,
+		data interface{},
+	) (interface{}, error) {
+		if f.Kind() == reflect.String && t == reflect.TypeOf(&rsa.PrivateKey{}) {
+			privateKeyStr := data.(string)
+			privateKeyStr = strings.ReplaceAll(privateKeyStr, "\\n", "\n")
+			return jwt.ParseRSAPrivateKeyFromPEM([]byte(privateKeyStr))
+		}
+		return data, nil
+	}
+}
+
+func stringToMapHook() mapstructure.DecodeHookFunc {
+	return func(
+		f reflect.Type,
+		t reflect.Type,
+		data interface{},
+	) (interface{}, error) {
+		if f.Kind() == reflect.String && t == reflect.TypeOf(map[string]float64{}) {
+			result := make(map[string]float64)
+			entries := strings.Split(data.(string), ",")
+			for _, entry := range entries {
+				parts := strings.SplitN(entry, "=", 2)
+				if len(parts) != 2 {
+					continue
+				}
+				key := parts[0]
+				val, err := strconv.ParseFloat(parts[1], 64)
+				if err != nil {
+					return nil, err
+				}
+				result[key] = val
+			}
+			return result, nil
+		}
+		return data, nil
 	}
 }

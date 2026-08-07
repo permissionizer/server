@@ -24,16 +24,25 @@ jobs:
       checks: write # for publishing test results and annotations
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v6
         with:
-          go-version: 1.24
+          go-version: 1.24.6
 
       - name: Build
         run: go build .
+
+      - name: Check gofmt
+        run: |
+          UNFORMATTED=$(gofmt -s -l .)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "The following files are not gofmt-ed:"
+            echo "$UNFORMATTED"
+            exit 1
+          fi
 
       - name: Test
         run: go test ./... -coverprofile=./cover.out -covermode=atomic

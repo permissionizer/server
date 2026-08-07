@@ -4,15 +4,14 @@ This is a server for [Permissionizer](https://github.com/marketplace/actions/per
 
 For detailed guidance on how to use the Permissionizer App, please refer to the [permissionizer/request-token](https://github.com/marketplace/actions/permissionizer-request-token) action documentation.
 
-### Custom Deployment
+### Self-hosting the Permissionizer Server
 
 While the process of issuing tokens is secure and requires explicit policies for
 the token exchange, to maintain full control over token exchange and deployment,
-organizations can create a custom Permissionizer App (public or internal) and
-deploy an instance of the Permissionizer Server. This ensures that no tokens
-ever leave the organization's internal network.
+organizations can create a custom Permissionizer App and deploy an instance of the
+Permissionizer Server. This ensures that no tokens ever leave the organization's internal network.
 
-To deploy a custom instance of the Permissionizer Server, follow these steps:
+To completely self-host a Permissionizer Server, follow these steps:
 
 1. **Create a GitHub App**
 
@@ -44,7 +43,7 @@ To deploy a custom instance of the Permissionizer Server, follow these steps:
      uses: permissionizer/request-token@v1
      with:
        permissionizer-server: https://permissionizer.mycompany.com
-       target-repository: permissionizer/server
+       target-repository: mycompany/myrepo
        permissions: |
          contents: read
          issues: write
@@ -73,5 +72,5 @@ To deploy a custom instance of the Permissionizer Server, follow these steps:
 
 > [!NOTE]
 > `--fake-token` flag allows generating an unsigned JWT token that imitates the token issued by GitHub OIDC.
-> In order to use it, you must disable all token checks when starting the server `permissionizer.unsecure-skip-token-validation: true` (Not suited for production use)
+> In order to use it, you must disable all token checks when starting the server `permissionizer.unsecure.skip-token-validation: true` (Not suited for production use)
 
