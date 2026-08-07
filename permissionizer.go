@@ -94,7 +94,7 @@ func main() {
 		}
 	}()
 	logger.Infow("Server started", "port", 8080, "version", fmt.Sprintf("%s (%s)", version, revision))
-	quit := make(chan os.Signal)
+	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	logger.Info("Shutting down server...")
