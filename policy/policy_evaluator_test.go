@@ -6,7 +6,7 @@ import (
 	"server/util"
 	"testing"
 
-	"github.com/google/go-github/v71/github"
+	"github.com/google/go-github/v80/github"
 	"github.com/onsi/gomega"
 )
 

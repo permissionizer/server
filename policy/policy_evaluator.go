@@ -9,7 +9,7 @@ import (
 	"server/util"
 	"strings"
 
-	"github.com/google/go-github/v71/github"
+	"github.com/google/go-github/v80/github"
 )
 
 func MatchTargetRepositoryPolicy(requestor *types.TokenRequestor, repositoryPolicy *types.RepositoryPolicy, requestedPermissions *github.InstallationPermissions) *types.PolicyError {

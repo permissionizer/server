@@ -25,5 +25,4 @@ jobs:
     uses: ./.github/workflows/reusable-deploy-cloud-run.yaml
     secrets: inherit
     with:
-      image: ${{ needs.docker.outputs.tags }}
-
+      image: permissionizer/server@${{ needs.docker.outputs.digest }}
